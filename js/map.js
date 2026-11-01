@@ -102,19 +102,49 @@ Views.map = async function (container) {
       const codes = Countries.codesByContinent(c.key, true);
       const visited = codes.filter((code) => status[code] === 'visited').length;
       const pct = codes.length ? Math.round((visited / codes.length) * 100) : 0;
-      return '<div class="continent-card">' +
+      return '<button class="continent-card" data-continent="' + c.key + '">' +
         '<div class="name">' + c.label + '</div>' +
         '<div class="frac">' + visited + ' von ' + codes.length + ' besucht</div>' +
         '<div class="progress-bar"><span style="width:' + pct + '%"></span></div>' +
-        '</div>';
+        '</button>';
     }).join('');
+    App.qsa('[data-continent]', container).forEach((btn) => {
+      btn.addEventListener('click', () => openContinentSheet(btn.dataset.continent));
+    });
+  }
+
+  function openContinentSheet(key) {
+    const label = CONTINENTS.find((c) => c.key === key).label;
+    const codes = Countries.codesByContinent(key, true).sort((a, b) => Countries.name(a).localeCompare(Countries.name(b), 'de'));
+    App.openSheet(label, (body) => {
+      body.innerHTML = codes.map((code) => {
+        const st = status[code];
+        const color = st === 'visited' ? 'var(--visited)' : st === 'planned' ? 'var(--planned)' : 'var(--map-default)';
+        return '<button class="list-item" data-code="' + code + '" style="margin-bottom:8px">' +
+          '<span class="dot" style="background:' + color + ';flex:none"></span>' +
+          '<div class="main"><div class="title">' + App.escapeHtml(Countries.name(code)) + '</div></div>' +
+          '<span class="chev">›</span></button>';
+      }).join('');
+      App.qsa('[data-code]', body).forEach((btn) => {
+        btn.addEventListener('click', () => {
+          App.closeSheet();
+          showCountryInfo(btn.dataset.code);
+        });
+      });
+    });
   }
 
   function showCountryInfo(code) {
     const name = Countries.name(code);
     const related = Trips.tripsForCountry(trips, code);
     const isManual = manualVisited.includes(code);
-    let html = '<div class="card"><h3>' + App.escapeHtml(name) + '</h3>';
+    const facts = Countries.facts(code);
+    let html = '<div class="card"><h3>' + Countries.flagEmoji(code) + ' ' + App.escapeHtml(name) + '</h3>';
+    if (facts) {
+      html += '<div class="card-row"><span class="label">Hauptstadt</span><span class="value">' + App.escapeHtml(facts.capital) + '</span></div>' +
+        '<div class="card-row"><span class="label">Einwohner</span><span class="value">' + Countries.formatPopulation(facts.population) + '</span></div>' +
+        '<div class="card-row"><span class="label">Sprache</span><span class="value">' + App.escapeHtml(facts.language) + '</span></div>';
+    }
     if (related.length === 0) {
       html += '<p class="muted mt-0">Noch kein Trip für dieses Land angelegt.</p>' +
         '<button class="btn primary" id="map-add-trip">Trip anlegen</button>';

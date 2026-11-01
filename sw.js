@@ -1,5 +1,5 @@
 // Service Worker: Precaching für vollständige Offline-Nutzung.
-const CACHE_NAME = 'reiseplaner-v5';
+const CACHE_NAME = 'reiseplaner-v6';
 const PRECACHE_URLS = [
   './',
   './index.html',
