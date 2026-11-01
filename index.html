@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Reiseplaner</title>
+<meta name="description" content="Offline-Reiseplaner: Trips, Buchungen, Packliste und Ausgaben verwalten.">
+<meta name="theme-color" content="#2563eb">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Reiseplaner">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <button id="btn-back" class="icon-btn" aria-label="Zurück" hidden>‹</button>
+    <h1 id="page-title">Reiseplaner</h1>
+    <button id="btn-theme" class="icon-btn" aria-label="Darstellung wechseln">◐</button>
+  </header>
+  <nav id="trip-tabs" class="trip-tabs" hidden></nav>
+  <main id="view" role="main"></main>
+  <button id="fab" class="fab" hidden aria-label="Neu">+</button>
+  <nav class="bottom-nav">
+    <a href="#/map" data-route="map"><span class="nav-icon">🗺️</span>Karte</a>
+    <a href="#/trips" data-route="trips"><span class="nav-icon">🧳</span>Trips</a>
+    <a href="#/spots" data-route="spots"><span class="nav-icon">💡</span>Ideen</a>
+    <a href="#/settings" data-route="settings"><span class="nav-icon">⚙️</span>Einstellungen</a>
+  </nav>
+</div>
+<div id="modal-root"></div>
+<div id="toast-root"></div>
+
+<script src="js/db.js"></script>
+<script src="js/core.js"></script>
+<script src="js/countries.js"></script>
+<script src="js/rates.js"></script>
+<script src="js/map.js"></script>
+<script src="js/trips.js"></script>
+<script src="js/spots.js"></script>
+<script src="js/bookings.js"></script>
+<script src="js/packing.js"></script>
+<script src="js/expenses.js"></script>
+<script src="js/backup.js"></script>
+<script src="js/seed.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
