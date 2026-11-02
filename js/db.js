@@ -3,6 +3,11 @@ const DB = (() => {
   const NAME = 'reiseapp-db';
   const VERSION = 3;
   let dbPromise = null;
+  let changeListener = null;
+
+  function setChangeListener(fn) {
+    changeListener = fn;
+  }
 
   function open() {
     if (dbPromise) return dbPromise;
@@ -64,7 +69,9 @@ const DB = (() => {
 
   async function put(storeName, value) {
     const store = await tx(storeName, 'readwrite');
-    return wrap(store.put(value));
+    const result = await wrap(store.put(value));
+    if (changeListener) changeListener(storeName);
+    return result;
   }
 
   async function get(storeName, key) {
@@ -84,7 +91,9 @@ const DB = (() => {
 
   async function remove(storeName, key) {
     const store = await tx(storeName, 'readwrite');
-    return wrap(store.delete(key));
+    const result = await wrap(store.delete(key));
+    if (changeListener) changeListener(storeName);
+    return result;
   }
 
   async function clear(storeName) {
@@ -99,5 +108,5 @@ const DB = (() => {
 
   const ALL_STORES = ['trips', 'bookings', 'packingTemplates', 'packingItems', 'expenses', 'rates', 'settings', 'spots', 'spotFolders'];
 
-  return { open, put, get, getAll, getAllByIndex, remove, clear, uid, ALL_STORES };
+  return { open, put, get, getAll, getAllByIndex, remove, clear, uid, ALL_STORES, setChangeListener };
 })();

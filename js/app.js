@@ -16,8 +16,16 @@ Views.settings = async function (container) {
   const appUrl = (await DB.get('settings', 'appUrl'));
   const apiKeyRow = await DB.get('settings', 'claudeApiKey');
   const extraPinned = await App.extraPinnedCurrencies();
+  const loggedIn = Auth.isLoggedIn();
 
   container.innerHTML =
+    '<div class="section-title">Konto</div>' +
+    (loggedIn
+      ? '<div class="card"><p class="muted mt-0">Angemeldet als <b>' + App.escapeHtml(Auth.username()) + '</b> (' + App.escapeHtml(Auth.currentUser().email) + ')</p>' +
+        '<div class="btn-row" style="margin-top:0"><button class="btn" id="acc-sync-btn">Jetzt synchronisieren</button><button class="btn danger" id="acc-logout-btn">Abmelden</button></div></div>'
+      : '<div class="card"><p class="muted mt-0">Als Gast angemeldet – alle Daten bleiben nur auf diesem Gerät.</p>' +
+        '<button class="btn primary" id="acc-login-btn">Konto erstellen / anmelden</button></div>') +
+
     '<div class="section-title">Darstellung</div>' +
     '<div class="card"><div class="tabline" id="s-theme">' +
     '<button data-v="light">Hell</button><button data-v="dark">Dunkel</button><button data-v="system">System</button>' +
@@ -73,6 +81,72 @@ Views.settings = async function (container) {
       App.qsa('#s-theme button', container).forEach((b) => b.classList.toggle('active', b === btn));
     });
   });
+
+  if (loggedIn) {
+    App.qs('#acc-sync-btn', container).addEventListener('click', async () => {
+      App.toast('Synchronisiere…');
+      try { await Sync.pushNow(); App.toast('Synchronisiert'); }
+      catch (e) { App.toast('Sync fehlgeschlagen – offline?'); }
+    });
+    App.qs('#acc-logout-btn', container).addEventListener('click', async () => {
+      if (!confirm('Wirklich abmelden? Deine lokalen Daten bleiben auf diesem Gerät erhalten.')) return;
+      await Auth.signOut();
+      App.toast('Abgemeldet');
+      Views.settings(container);
+    });
+  } else {
+    App.qs('#acc-login-btn', container).addEventListener('click', () => {
+      App.openSheet('Konto erstellen / anmelden', (body) => renderAccountEmailStep(body));
+    });
+  }
+
+  function renderAccountEmailStep(body) {
+    body.innerHTML =
+      '<div class="field"><label>E-Mail</label><input id="acc-email" type="email" placeholder="du@beispiel.de" autocomplete="email"></div>' +
+      '<div class="field"><label>Benutzername</label><input id="acc-username" type="text" placeholder="z. B. Luca" autocomplete="username"></div>' +
+      '<p class="field-hint mt-0">Hast du schon ein Konto, reicht die E-Mail – der Benutzername wird dann ignoriert.</p>' +
+      '<button class="btn primary" id="acc-send-code">Code anfordern</button>';
+    App.qs('#acc-send-code', body).addEventListener('click', async () => {
+      const email = App.qs('#acc-email', body).value.trim();
+      const username = App.qs('#acc-username', body).value.trim();
+      if (!email) { App.toast('Bitte eine E-Mail eingeben'); return; }
+      const btn = App.qs('#acc-send-code', body);
+      btn.disabled = true; btn.textContent = 'Sende…';
+      try {
+        await Auth.requestCode(email, username);
+        renderAccountCodeStep(body, email);
+      } catch (err) {
+        App.toast('Fehler: ' + (err.message || 'Code konnte nicht gesendet werden'));
+        btn.disabled = false; btn.textContent = 'Code anfordern';
+      }
+    });
+  }
+
+  function renderAccountCodeStep(body, email) {
+    body.innerHTML =
+      '<p class="muted mt-0">Code an <b>' + App.escapeHtml(email) + '</b> gesendet. Bitte eintragen:</p>' +
+      '<div class="field"><label>Code</label><input id="acc-code" type="text" inputmode="numeric" placeholder="Code aus der E-Mail" maxlength="12"></div>' +
+      '<button class="btn primary" id="acc-verify-code">Bestätigen</button>';
+    App.qs('#acc-verify-code', body).addEventListener('click', async () => {
+      const code = App.qs('#acc-code', body).value.trim();
+      if (!code) { App.toast('Bitte den Code eingeben'); return; }
+      const btn = App.qs('#acc-verify-code', body);
+      btn.disabled = true; btn.textContent = 'Prüfe…';
+      try {
+        const result = await Auth.verifyCode(email, code);
+        App.closeSheet();
+        if (result.status === 'cancelled') {
+          App.toast('Abgemeldet – deine Gast-Daten blieben unverändert');
+        } else {
+          App.toast(result.status === 'uploaded' ? 'Konto erstellt – deine Daten sind jetzt gesichert' : 'Angemeldet – deine Konto-Daten wurden geladen');
+        }
+        Views.settings(container);
+      } catch (err) {
+        App.toast('Code ungültig oder abgelaufen');
+        btn.disabled = false; btn.textContent = 'Bestätigen';
+      }
+    });
+  }
 
   function renderPinnedCurrencies() {
     const box = App.qs('#s-pinned-currencies', container);
@@ -259,6 +333,13 @@ async function route() {
 App.refresh = route;
 
 (async function init() {
+  Auth.init();
+  await Auth.restoreSession();
+  if (Auth.isLoggedIn()) {
+    Sync.registerChangeListener();
+    if (navigator.onLine) Sync.pushNow().catch(() => {});
+  }
+
   await Promise.all([Rates.ensureSeeded()]);
   await Seed.run();
 
