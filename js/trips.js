@@ -306,7 +306,9 @@ const Trips = {
   },
 };
 
-Views.trips = async function (container, mode) {
+const TRIPS_RANGE_LABELS = { all: 'Alle', '2y': 'Letzte 2 Jahre', '5y': 'Letzte 5 Jahre', months: 'Nach Monat (letzte 12 Mon.)' };
+
+Views.trips = async function (container, mode, range) {
   App.setTitle('Trips');
   App.setBack(null);
   App.setTripTabs(null);
@@ -319,43 +321,99 @@ Views.trips = async function (container, mode) {
   }
 
   mode = mode || 'list';
+  range = range || 'all';
   const toggleHtml = '<div class="tabline" id="trips-mode"><button data-m="list"' + (mode === 'list' ? ' class="active"' : '') + '>Liste</button>' +
     '<button data-m="year"' + (mode === 'year' ? ' class="active"' : '') + '>Nach Jahr</button></div>';
 
   if (mode === 'year') {
-    container.innerHTML = toggleHtml + '<div id="trips-body">Lädt…</div>';
-    await Trips.renderYearOverview(trips, App.qs('#trips-body', container));
+    const rangeHtml = '<div class="chip-select" id="trips-range" style="margin-bottom:14px">' +
+      Object.keys(TRIPS_RANGE_LABELS).map((k) =>
+        '<span class="chip' + (range === k ? ' selected' : '') + '" data-range="' + k + '">' + TRIPS_RANGE_LABELS[k] + '</span>'
+      ).join('') + '</div>';
+    container.innerHTML = toggleHtml + rangeHtml + '<div id="trips-body">Lädt…</div>';
+    await Trips.renderPeriodOverview(trips, App.qs('#trips-body', container), range);
+    App.qsa('#trips-range [data-range]', container).forEach((chip) => {
+      chip.addEventListener('click', () => Views.trips(container, mode, chip.dataset.range));
+    });
   } else {
     container.innerHTML = toggleHtml + '<div id="trips-body">' + Trips.renderList(trips) + '</div>';
     Trips.wireList(App.qs('#trips-body', container));
   }
 
   App.qsa('#trips-mode button', container).forEach((btn) => {
-    btn.addEventListener('click', () => Views.trips(container, btn.dataset.m));
+    btn.addEventListener('click', () => Views.trips(container, btn.dataset.m, range));
   });
 };
 
-Trips.renderYearOverview = async function (trips, container) {
-  const groups = {};
-  trips.forEach((t) => {
-    const year = (t.startDate || '').slice(0, 4) || 'Unbekannt';
-    (groups[year] = groups[year] || []).push(t);
-  });
-  const years = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+Trips.renderPeriodOverview = async function (trips, container, range) {
+  let filtered = trips;
+  let groupByMonth = false;
 
-  const cards = await Promise.all(years.map(async (year) => {
-    const overviews = await Promise.all(groups[year].map((t) => Trips.computeOverview(t.id)));
-    const budget = overviews.reduce((s, o) => s + (o.trip.budget || 0), 0);
-    const gebucht = overviews.reduce((s, o) => s + o.summeGebucht, 0);
-    const ausgegeben = overviews.reduce((s, o) => s + o.summeAusgegeben, 0);
+  if (range === '2y' || range === '5y') {
+    const years = range === '2y' ? 2 : 5;
+    const cutoff = new Date();
+    cutoff.setFullYear(cutoff.getFullYear() - years);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    filtered = trips.filter((t) => (t.endDate || t.startDate || '') >= cutoffStr);
+  } else if (range === 'months') {
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - 12);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    filtered = trips.filter((t) => (t.endDate || t.startDate || '') >= cutoffStr);
+    groupByMonth = true;
+  }
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<p class="muted center" style="margin-top:24px">Keine Trips in diesem Zeitraum.</p>';
+    return;
+  }
+
+  const groups = {};
+  filtered.forEach((t) => {
+    const key = groupByMonth ? (t.startDate || '').slice(0, 7) || 'Unbekannt' : (t.startDate || '').slice(0, 4) || 'Unbekannt';
+    (groups[key] = groups[key] || []).push(t);
+  });
+  const keys = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+
+  const overviews = await Promise.all(filtered.map((t) => Trips.computeOverview(t.id)));
+  const overviewById = {};
+  overviews.forEach((o) => { overviewById[o.trip.id] = o; });
+
+  const grandBudget = overviews.reduce((s, o) => s + (o.trip.budget || 0), 0);
+  const grandGebucht = overviews.reduce((s, o) => s + o.summeGebucht, 0);
+  const grandAusgegeben = overviews.reduce((s, o) => s + o.summeAusgegeben, 0);
+  const grandRest = grandBudget - grandGebucht - grandAusgegeben;
+
+  const MONTH_NAMES = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+  function groupLabel(key) {
+    if (!groupByMonth) return key;
+    const parts = key.split('-');
+    const mIdx = parseInt(parts[1], 10) - 1;
+    return (MONTH_NAMES[mIdx] || key) + ' ' + parts[0];
+  }
+
+  let html = '<div class="section-title">Gesamt' + (range !== 'all' ? ' – ' + TRIPS_RANGE_LABELS[range] : '') + '</div>' +
+    '<div class="card">' +
+    '<div class="card-row"><span class="label">Budget gesamt</span><span class="value">' + App.formatMoney(grandBudget, 'EUR') + '</span></div>' +
+    '<div class="card-row"><span class="label">Restbudget</span><span class="value">' + App.formatMoney(grandRest, 'EUR') + '</span></div>' +
+    '<div class="card-row"><span class="label">Summe gebucht</span><span class="value">' + App.formatMoney(grandGebucht, 'EUR') + '</span></div>' +
+    '<div class="card-row"><span class="label">Unterwegs ausgegeben</span><span class="value">' + App.formatMoney(grandAusgegeben, 'EUR') + '</span></div>' +
+    '<div class="card-row"><span class="label">Trips in diesem Zeitraum</span><span class="value">' + filtered.length + '</span></div>' +
+    '</div>';
+
+  keys.forEach((key) => {
+    const groupOverviews = groups[key].map((t) => overviewById[t.id]);
+    const budget = groupOverviews.reduce((s, o) => s + (o.trip.budget || 0), 0);
+    const gebucht = groupOverviews.reduce((s, o) => s + o.summeGebucht, 0);
+    const ausgegeben = groupOverviews.reduce((s, o) => s + o.summeAusgegeben, 0);
     const restbudget = budget - gebucht - ausgegeben;
-    const tripRows = groups[year].map((t) =>
+    const tripRows = groups[key].map((t) =>
       '<button class="list-item" data-id="' + t.id + '" style="margin-top:8px">' +
       '<div class="main"><div class="title">' + App.escapeHtml(t.name) + '</div>' +
       '<div class="sub">' + App.formatDateRange(t.startDate, t.endDate) + '</div></div>' +
       '<span class="chev">›</span></button>'
     ).join('');
-    return '<div class="section-title">' + App.escapeHtml(year) + ' · ' + groups[year].length + ' Trip' + (groups[year].length === 1 ? '' : 's') + '</div>' +
+    html += '<div class="section-title">' + App.escapeHtml(groupLabel(key)) + ' · ' + groups[key].length + ' Trip' + (groups[key].length === 1 ? '' : 's') + '</div>' +
       '<div class="card">' +
       '<div class="card-row"><span class="label">Budget gesamt</span><span class="value">' + App.formatMoney(budget, 'EUR') + '</span></div>' +
       '<div class="card-row"><span class="label">Restbudget</span><span class="value">' + App.formatMoney(restbudget, 'EUR') + '</span></div>' +
@@ -363,9 +421,9 @@ Trips.renderYearOverview = async function (trips, container) {
       '<div class="card-row"><span class="label">Unterwegs ausgegeben</span><span class="value">' + App.formatMoney(ausgegeben, 'EUR') + '</span></div>' +
       tripRows +
       '</div>';
-  }));
+  });
 
-  container.innerHTML = cards.join('');
+  container.innerHTML = html;
   Trips.wireList(container);
 };
 
