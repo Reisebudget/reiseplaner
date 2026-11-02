@@ -42,15 +42,18 @@ const Expenses = {
       '</div>' +
       '<div class="field"><label>Datum</label><input id="e-date" type="date" value="' + App.today() + '"></div>' +
       '<div class="field"><label>Notiz</label><input id="e-note" type="text" placeholder="optional"></div>' +
+      (trip.people && trip.people.length ? '<div class="field"><label>Aufteilen zwischen</label><div id="e-people-chips" class="chip-select" style="margin-bottom:0"></div></div>' : '') +
       '<button class="btn primary" id="e-save">Ausgabe speichern</button>' +
       '</div>' +
       '<div class="card-row" style="margin-bottom:10px"><span class="label">Gesamt ausgegeben</span><span class="value">' + App.formatMoney(total, 'EUR') + '</span></div>' +
       '<div id="e-list">' + (rows.length === 0 ? '<div class="empty-state"><div class="big">💳</div>Noch keine Ausgaben erfasst.</div>' : rows.map(row).join('')) + '</div>';
 
     function row(r) {
-      return '<button class="list-item" data-id="' + r.id + '">' +
+      const split = r.splitWith && r.splitWith.length >= 2
+        ? '<br><span class="muted">geteilt mit ' + r.splitWith.length + ' Personen · ' + App.formatMoney(r.amount / r.splitWith.length, r.currency) + ' pro Person</span>' : '';
+      return '<button class="list-item" data-id="' + r.id + '" style="align-items:flex-start">' +
         '<div class="main"><div class="title">' + CATEGORY_LABELS[r.category] + ' · ' + App.escapeHtml(Countries.name(r.country)) + '</div>' +
-        '<div class="sub">' + App.formatDate(r.date) + (r.note ? ' · ' + App.escapeHtml(r.note) : '') + '</div></div>' +
+        '<div class="sub">' + App.formatDate(r.date) + (r.note ? ' · ' + App.escapeHtml(r.note) : '') + split + '</div></div>' +
         '<div class="trailing">' + App.formatMoney(r.amount, r.currency) +
         (r.currency !== 'EUR' ? '<br><span class="muted">' + App.formatMoney(r.amountEUR, 'EUR') + '</span>' : '') + '</div></button>';
     }
@@ -82,6 +85,24 @@ const Expenses = {
       });
     });
 
+    let selectedPeople = [];
+    const peopleChipsBox = App.qs('#e-people-chips', container);
+    function renderPeopleChips() {
+      if (!peopleChipsBox) return;
+      peopleChipsBox.innerHTML = trip.people.map((p) =>
+        '<span class="chip' + (selectedPeople.includes(p) ? ' selected' : '') + '" data-person="' + App.escapeHtml(p) + '">' + App.escapeHtml(p) + '</span>'
+      ).join('');
+      App.qsa('[data-person]', peopleChipsBox).forEach((chip) => {
+        chip.addEventListener('click', () => {
+          const name = chip.dataset.person;
+          const idx = selectedPeople.indexOf(name);
+          if (idx === -1) selectedPeople.push(name); else selectedPeople.splice(idx, 1);
+          renderPeopleChips();
+        });
+      });
+    }
+    renderPeopleChips();
+
     App.qs('#e-save', container).addEventListener('click', async () => {
       const amount = App.parseDecimal(App.qs('#e-amount', container).value);
       if (!amount) { App.toast('Bitte einen Betrag eingeben'); return; }
@@ -90,6 +111,7 @@ const Expenses = {
         category: App.qs('#e-category', container).value, country: selectedCountry,
         date: App.qs('#e-date', container).value || App.today(),
         note: App.qs('#e-note', container).value.trim(),
+        splitWith: selectedPeople,
       });
       App.toast('Ausgabe gespeichert');
       Expenses.render(trip, container);
@@ -116,6 +138,7 @@ const Expenses = {
         '</div>' +
         '<div class="field"><label>Datum</label><input id="x-date" type="date" value="' + expense.date + '"></div>' +
         '<div class="field"><label>Notiz</label><input id="x-note" type="text" value="' + App.escapeHtml(expense.note || '') + '"></div>' +
+        (trip.people && trip.people.length ? '<div class="field"><label>Aufteilen zwischen</label><div id="x-people-chips" class="chip-select" style="margin-bottom:8px"></div></div>' : '') +
         '<button class="btn danger" id="x-delete" style="margin-bottom:10px">Ausgabe löschen</button>' +
         '<div class="btn-row"><button class="btn ghost" id="x-cancel">Abbrechen</button><button class="btn primary" id="x-save">Speichern</button></div>';
 
@@ -144,6 +167,24 @@ const Expenses = {
         });
       });
 
+      let selectedPeople = (expense.splitWith || []).slice();
+      const peopleChipsBox = App.qs('#x-people-chips', body);
+      function renderPeopleChips() {
+        if (!peopleChipsBox) return;
+        peopleChipsBox.innerHTML = trip.people.map((p) =>
+          '<span class="chip' + (selectedPeople.includes(p) ? ' selected' : '') + '" data-person="' + App.escapeHtml(p) + '">' + App.escapeHtml(p) + '</span>'
+        ).join('');
+        App.qsa('[data-person]', peopleChipsBox).forEach((chip) => {
+          chip.addEventListener('click', () => {
+            const name = chip.dataset.person;
+            const idx = selectedPeople.indexOf(name);
+            if (idx === -1) selectedPeople.push(name); else selectedPeople.splice(idx, 1);
+            renderPeopleChips();
+          });
+        });
+      }
+      renderPeopleChips();
+
       App.qs('#x-cancel', body).addEventListener('click', () => App.closeSheet());
       App.qs('#x-delete', body).addEventListener('click', async () => {
         if (!confirm('Diese Ausgabe wirklich löschen?')) return;
@@ -159,6 +200,7 @@ const Expenses = {
           id: expense.id, tripId: trip.id, amount, currency: selectedCurrency,
           category: App.qs('#x-category', body).value, country: selectedCountry,
           date: App.qs('#x-date', body).value, note: App.qs('#x-note', body).value.trim(),
+          splitWith: selectedPeople,
         });
         App.closeSheet();
         App.toast('Gespeichert');

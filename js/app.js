@@ -1,88 +1,93 @@
 // Router, Theme, Einstellungen, App-Initialisierung.
-Views.settings = async function (container) {
+const SETTINGS_CATEGORIES = [
+  { key: 'darstellung', label: 'Darstellung', icon: '🎨' },
+  { key: 'bedienungshilfen', label: 'Bedienungshilfen', icon: '♿' },
+  { key: 'wechselkurse', label: 'Wechselkurse', icon: '💱' },
+  { key: 'spots', label: 'Spot-Sammlung', icon: '💡' },
+  { key: 'notfall', label: 'Notfall', icon: '🚨' },
+  { key: 'backup', label: 'Backup', icon: '💾' },
+];
+
+Views.settings = async function (container, category) {
+  App.setTripTabs(null);
+  if (category) {
+    const cat = SETTINGS_CATEGORIES.find((c) => c.key === category);
+    App.setTitle(cat ? cat.label : 'Einstellungen');
+    App.setBack('#/settings');
+    App.setFab(category === 'notfall' ? () => Emergency.openAddSheet(() => Emergency.render(container)) : null, 'Neu');
+    await renderSettingsCategory(container, category);
+    return;
+  }
   App.setTitle('Einstellungen');
   App.setBack(null);
-  App.setTripTabs(null);
   App.setFab(null);
+  await renderSettingsHome(container);
+};
 
-  const themeRow = await DB.get('settings', 'theme');
-  const theme = (themeRow && themeRow.value) || 'system';
-  const trips = await Trips.all();
-  const relevantCurrencies = Array.from(new Set(['EUR', ...trips.flatMap((t) => (t.countries || []).map((c) => Countries.currency(c)))]));
-  const rateRows = await Rates.getAll();
-  const rateMap = {};
-  rateRows.forEach((r) => { rateMap[r.code] = r; });
-
-  const appUrl = (await DB.get('settings', 'appUrl'));
-  const apiKeyRow = await DB.get('settings', 'claudeApiKey');
-  const extraPinned = await App.extraPinnedCurrencies();
+async function renderSettingsHome(container) {
   const loggedIn = Auth.isLoggedIn();
+  const avatarRow = await DB.get('settings', 'avatar');
+  const avatar = avatarRow && avatarRow.value;
 
   container.innerHTML =
-    '<div class="section-title">Konto</div>' +
+    '<div class="account-card">' +
+    '<button class="account-avatar" id="acc-avatar-btn">' +
+    (avatar ? '<img src="' + avatar + '">' : '<span>' + (loggedIn ? App.escapeHtml(Auth.username().slice(0, 1).toUpperCase()) : '👤') + '</span>') +
+    '</button>' +
+    '<div class="account-info">' +
     (loggedIn
-      ? '<div class="card"><p class="muted mt-0">Angemeldet als <b>' + App.escapeHtml(Auth.username()) + '</b> (' + App.escapeHtml(Auth.currentUser().email) + ')</p>' +
-        '<div class="btn-row" style="margin-top:0"><button class="btn" id="acc-sync-btn">Jetzt synchronisieren</button><button class="btn danger" id="acc-logout-btn">Abmelden</button></div></div>'
-      : '<div class="card"><p class="muted mt-0">Als Gast angemeldet – alle Daten bleiben nur auf diesem Gerät.</p>' +
-        '<button class="btn primary" id="acc-login-btn">Konto erstellen / anmelden</button></div>') +
-
-    '<div class="section-title">Darstellung</div>' +
-    '<div class="card"><div class="tabline" id="s-theme">' +
-    '<button data-v="light">Hell</button><button data-v="dark">Dunkel</button><button data-v="system">System</button>' +
+      ? '<div class="account-name" id="acc-name-display">' + App.escapeHtml(Auth.username()) + ' <span class="edit-hint">✎</span></div><div class="account-email">' + App.escapeHtml(Auth.currentUser().email) + '</div>'
+      : '<div class="account-name">Gast</div><div class="account-email">Daten bleiben nur auf diesem Gerät</div>') +
     '</div></div>' +
-
-    '<div class="section-title">Bedienungshilfen</div>' +
-    '<div class="card">' +
-    '<p class="muted mt-0">EUR ist immer angepinnt und steht überall zuoberst. Weitere Währungen, die du oft brauchst, kannst du hier zusätzlich anpinnen.</p>' +
-    '<div class="chip-select" id="s-pinned-currencies" style="margin-bottom:10px"></div>' +
-    '<button class="btn" id="s-pin-currency">+ Währung anpinnen</button>' +
+    '<input type="file" id="acc-avatar-file" accept="image/*" hidden>' +
+    '<div class="btn-row" style="margin-top:0;margin-bottom:22px">' +
+    (loggedIn
+      ? '<button class="btn" id="acc-sync-btn">Jetzt synchronisieren</button><button class="btn danger" id="acc-logout-btn">Abmelden</button>'
+      : '<button class="btn primary" id="acc-login-btn">Konto erstellen / anmelden</button>') +
     '</div>' +
+    '<div class="section-title">Mehr</div>' +
+    '<div class="folder-grid">' + SETTINGS_CATEGORIES.map((c) =>
+      '<button class="folder-card" data-nav="' + c.key + '"><div class="folder-card-icon">' + c.icon + '</div><div class="folder-card-name">' + c.label + '</div></button>'
+    ).join('') + '</div>';
 
-    '<div class="section-title">Spot-Sammlung</div>' +
-    '<div class="card">' +
-    '<div class="field"><label>App-Adresse (für Teilen aus TikTok &amp; Co.)</label>' +
-    '<input id="s-app-url" type="url" placeholder="https://dein-name.github.io/reise-app/" value="' + App.escapeHtml((appUrl && appUrl.value) || '') + '"></div>' +
-    '<p class="field-hint mt-0">Trag hier die Adresse ein, unter der die App später auf GitHub Pages erreichbar ist (inkl. <code>index.html</code>, falls nötig).</p>' +
-    '<div class="field"><label>Claude API-Schlüssel (optional, für KI-Vorschläge)</label>' +
-    '<input id="s-claude-key" type="password" placeholder="sk-ant-…" value="' + App.escapeHtml((apiKeyRow && apiKeyRow.value) || '') + '" autocomplete="off"></div>' +
-    '<p class="field-hint mt-0">Bleibt ausschließlich auf diesem Gerät gespeichert. Ohne Schlüssel funktionieren Link-Speichern, oEmbed und Texterkennung trotzdem.</p>' +
-    '<button class="btn" id="s-save-spot-settings" style="margin-top:6px">Speichern</button>' +
-    '</div>' +
+  App.qsa('[data-nav]', container).forEach((btn) => {
+    btn.addEventListener('click', () => App.navigate('#/settings/' + btn.dataset.nav));
+  });
 
-    '<div class="section-title">iOS-Kurzbefehl einrichten</div>' +
-    '<div class="card" id="s-shortcut-guide"></div>' +
-
-    '<div class="section-title">Wechselkurse</div>' +
-    '<div class="card">' +
-    '<p class="muted mt-0">Einheiten Fremdwährung pro 1 EUR. Beim Erfassen einer Ausgabe wird der aktuelle Kurs automatisch gespeichert.</p>' +
-    '<button class="btn primary" id="s-rates-update" style="margin-bottom:12px">Kurse online aktualisieren</button>' +
-    '<div id="s-rates-list"></div>' +
-    '<input id="s-rates-search" class="search-input" type="text" placeholder="Weitere Währung suchen (z. B. USD)…" style="margin-top:10px">' +
-    '<div id="s-rates-search-results"></div>' +
-    '</div>' +
-
-    '<div class="section-title">Backup</div>' +
-    '<div class="card">' +
-    '<p class="muted mt-0">Sichere alle Daten als Datei oder spiele ein Backup zurück.</p>' +
-    '<div class="btn-row" style="margin-top:0">' +
-    '<button class="btn" id="s-export">Exportieren</button>' +
-    '<button class="btn" id="s-import">Importieren</button>' +
-    '</div>' +
-    '<input id="s-import-file" type="file" accept="application/json" hidden>' +
-    '</div>' +
-
-    '<p class="muted center" style="margin-top:24px">Alle Daten bleiben ausschließlich auf diesem Gerät.</p>';
-
-  App.qsa('#s-theme button', container).forEach((btn) => {
-    if (btn.dataset.v === theme) btn.classList.add('active');
-    btn.addEventListener('click', async () => {
-      await DB.put('settings', { key: 'theme', value: btn.dataset.v });
-      App.applyTheme(btn.dataset.v);
-      App.qsa('#s-theme button', container).forEach((b) => b.classList.toggle('active', b === btn));
-    });
+  App.qs('#acc-avatar-btn', container).addEventListener('click', () => App.qs('#acc-avatar-file', container).click());
+  App.qs('#acc-avatar-file', container).addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const raw = await App.fileToDataUrl(file);
+    const small = await App.downscaleImage(raw, 240, 0.85);
+    await DB.put('settings', { key: 'avatar', value: small });
+    renderSettingsHome(container);
   });
 
   if (loggedIn) {
+    App.qs('#acc-name-display', container).addEventListener('click', () => {
+      App.openSheet('Name ändern', (body) => {
+        body.innerHTML =
+          '<div class="field"><label>Benutzername</label><input id="acc-name-input" type="text" value="' + App.escapeHtml(Auth.username()) + '"></div>' +
+          '<div class="btn-row"><button class="btn ghost" id="acc-name-cancel">Abbrechen</button><button class="btn primary" id="acc-name-save">Speichern</button></div>';
+        App.qs('#acc-name-cancel', body).addEventListener('click', () => App.closeSheet());
+        App.qs('#acc-name-save', body).addEventListener('click', async () => {
+          const name = App.qs('#acc-name-input', body).value.trim();
+          if (!name) { App.toast('Bitte einen Namen eingeben'); return; }
+          const btn = App.qs('#acc-name-save', body);
+          btn.disabled = true; btn.textContent = 'Speichert…';
+          try {
+            await Auth.updateUsername(name);
+            App.closeSheet();
+            App.toast('Gespeichert');
+            renderSettingsHome(container);
+          } catch (err) {
+            App.toast('Fehler: ' + (err.message || 'Konnte nicht gespeichert werden'));
+            btn.disabled = false; btn.textContent = 'Speichern';
+          }
+        });
+      });
+    });
     App.qs('#acc-sync-btn', container).addEventListener('click', async () => {
       App.toast('Synchronisiere…');
       try { await Sync.pushNow(); App.toast('Synchronisiert'); }
@@ -92,61 +97,98 @@ Views.settings = async function (container) {
       if (!confirm('Wirklich abmelden? Deine lokalen Daten bleiben auf diesem Gerät erhalten.')) return;
       await Auth.signOut();
       App.toast('Abgemeldet');
-      Views.settings(container);
+      renderSettingsHome(container);
     });
   } else {
     App.qs('#acc-login-btn', container).addEventListener('click', () => {
-      App.openSheet('Konto erstellen / anmelden', (body) => renderAccountEmailStep(body));
+      App.openSheet('Konto erstellen / anmelden', (body) => renderAccountEmailStep(body, container));
     });
   }
+}
 
-  function renderAccountEmailStep(body) {
-    body.innerHTML =
-      '<div class="field"><label>E-Mail</label><input id="acc-email" type="email" placeholder="du@beispiel.de" autocomplete="email"></div>' +
-      '<div class="field"><label>Benutzername</label><input id="acc-username" type="text" placeholder="z. B. Luca" autocomplete="username"></div>' +
-      '<p class="field-hint mt-0">Hast du schon ein Konto, reicht die E-Mail – der Benutzername wird dann ignoriert.</p>' +
-      '<button class="btn primary" id="acc-send-code">Code anfordern</button>';
-    App.qs('#acc-send-code', body).addEventListener('click', async () => {
-      const email = App.qs('#acc-email', body).value.trim();
-      const username = App.qs('#acc-username', body).value.trim();
-      if (!email) { App.toast('Bitte eine E-Mail eingeben'); return; }
-      const btn = App.qs('#acc-send-code', body);
-      btn.disabled = true; btn.textContent = 'Sende…';
-      try {
-        await Auth.requestCode(email, username);
-        renderAccountCodeStep(body, email);
-      } catch (err) {
-        App.toast('Fehler: ' + (err.message || 'Code konnte nicht gesendet werden'));
-        btn.disabled = false; btn.textContent = 'Code anfordern';
-      }
-    });
-  }
+function renderAccountEmailStep(body, container) {
+  body.innerHTML =
+    '<div class="field"><label>E-Mail</label><input id="acc-email" type="email" placeholder="du@beispiel.de" autocomplete="email"></div>' +
+    '<div class="field"><label>Benutzername</label><input id="acc-username" type="text" placeholder="z. B. Luca" autocomplete="username"></div>' +
+    '<p class="field-hint mt-0">Hast du schon ein Konto, reicht die E-Mail – der Benutzername wird dann ignoriert.</p>' +
+    '<button class="btn primary" id="acc-send-code">Code anfordern</button>';
+  App.qs('#acc-send-code', body).addEventListener('click', async () => {
+    const email = App.qs('#acc-email', body).value.trim();
+    const username = App.qs('#acc-username', body).value.trim();
+    if (!email) { App.toast('Bitte eine E-Mail eingeben'); return; }
+    const btn = App.qs('#acc-send-code', body);
+    btn.disabled = true; btn.textContent = 'Sende…';
+    try {
+      await Auth.requestCode(email, username);
+      renderAccountCodeStep(body, email, container);
+    } catch (err) {
+      App.toast('Fehler: ' + (err.message || 'Code konnte nicht gesendet werden'));
+      btn.disabled = false; btn.textContent = 'Code anfordern';
+    }
+  });
+}
 
-  function renderAccountCodeStep(body, email) {
-    body.innerHTML =
-      '<p class="muted mt-0">Code an <b>' + App.escapeHtml(email) + '</b> gesendet. Bitte eintragen:</p>' +
-      '<div class="field"><label>Code</label><input id="acc-code" type="text" inputmode="numeric" placeholder="Code aus der E-Mail" maxlength="12"></div>' +
-      '<button class="btn primary" id="acc-verify-code">Bestätigen</button>';
-    App.qs('#acc-verify-code', body).addEventListener('click', async () => {
-      const code = App.qs('#acc-code', body).value.trim();
-      if (!code) { App.toast('Bitte den Code eingeben'); return; }
-      const btn = App.qs('#acc-verify-code', body);
-      btn.disabled = true; btn.textContent = 'Prüfe…';
-      try {
-        const result = await Auth.verifyCode(email, code);
-        App.closeSheet();
-        if (result.status === 'cancelled') {
-          App.toast('Abgemeldet – deine Gast-Daten blieben unverändert');
-        } else {
-          App.toast(result.status === 'uploaded' ? 'Konto erstellt – deine Daten sind jetzt gesichert' : 'Angemeldet – deine Konto-Daten wurden geladen');
-        }
-        Views.settings(container);
-      } catch (err) {
-        App.toast('Code ungültig oder abgelaufen');
-        btn.disabled = false; btn.textContent = 'Bestätigen';
+function renderAccountCodeStep(body, email, container) {
+  body.innerHTML =
+    '<p class="muted mt-0">Code an <b>' + App.escapeHtml(email) + '</b> gesendet. Bitte eintragen:</p>' +
+    '<div class="field"><label>Code</label><input id="acc-code" type="text" inputmode="numeric" placeholder="Code aus der E-Mail" maxlength="12"></div>' +
+    '<button class="btn primary" id="acc-verify-code">Bestätigen</button>';
+  App.qs('#acc-verify-code', body).addEventListener('click', async () => {
+    const code = App.qs('#acc-code', body).value.trim();
+    if (!code) { App.toast('Bitte den Code eingeben'); return; }
+    const btn = App.qs('#acc-verify-code', body);
+    btn.disabled = true; btn.textContent = 'Prüfe…';
+    try {
+      const result = await Auth.verifyCode(email, code);
+      App.closeSheet();
+      if (result.status === 'cancelled') {
+        App.toast('Abgemeldet – deine Gast-Daten blieben unverändert');
+      } else {
+        App.toast(result.status === 'uploaded' ? 'Konto erstellt – deine Daten sind jetzt gesichert' : 'Angemeldet – deine Konto-Daten wurden geladen');
       }
+      renderSettingsHome(container);
+    } catch (err) {
+      App.toast('Code ungültig oder abgelaufen');
+      btn.disabled = false; btn.textContent = 'Bestätigen';
+    }
+  });
+}
+
+async function renderSettingsCategory(container, key) {
+  if (key === 'darstellung') return renderDarstellung(container);
+  if (key === 'bedienungshilfen') return renderBedienungshilfen(container);
+  if (key === 'wechselkurse') return renderWechselkurse(container);
+  if (key === 'spots') return renderSpotSettings(container);
+  if (key === 'notfall') return Emergency.render(container);
+  if (key === 'backup') return renderBackupSettings(container);
+  container.innerHTML = '<p class="muted">Unbekannter Bereich.</p>';
+}
+
+async function renderDarstellung(container) {
+  const themeRow = await DB.get('settings', 'theme');
+  const theme = (themeRow && themeRow.value) || 'system';
+  container.innerHTML =
+    '<div class="card"><div class="tabline" id="s-theme">' +
+    '<button data-v="light">Hell</button><button data-v="dark">Dunkel</button><button data-v="system">System</button>' +
+    '</div></div>';
+  App.qsa('#s-theme button', container).forEach((btn) => {
+    if (btn.dataset.v === theme) btn.classList.add('active');
+    btn.addEventListener('click', async () => {
+      await DB.put('settings', { key: 'theme', value: btn.dataset.v });
+      App.applyTheme(btn.dataset.v);
+      App.qsa('#s-theme button', container).forEach((b) => b.classList.toggle('active', b === btn));
     });
-  }
+  });
+}
+
+async function renderBedienungshilfen(container) {
+  const extraPinned = await App.extraPinnedCurrencies();
+  container.innerHTML =
+    '<div class="card">' +
+    '<p class="muted mt-0">EUR ist immer angepinnt und steht überall zuoberst. Weitere Währungen, die du oft brauchst, kannst du hier zusätzlich anpinnen.</p>' +
+    '<div class="chip-select" id="s-pinned-currencies" style="margin-bottom:10px"></div>' +
+    '<button class="btn" id="s-pin-currency">+ Währung anpinnen</button>' +
+    '</div>';
 
   function renderPinnedCurrencies() {
     const box = App.qs('#s-pinned-currencies', container);
@@ -171,34 +213,23 @@ Views.settings = async function (container) {
       },
     });
   });
+}
 
-  function renderShortcutGuide() {
-    const url = App.qs('#s-app-url', container).value.trim().replace(/\/$/, '');
-    const base = url || 'https://dein-name.github.io/reise-app';
-    App.qs('#s-shortcut-guide', container).innerHTML =
-      '<ol style="margin:0;padding-left:20px;font-size:14px;line-height:1.7">' +
-      '<li>Öffne die <b>Kurzbefehle</b>-App → tippe oben rechts auf <b>+</b> für einen neuen Kurzbefehl.</li>' +
-      '<li>Benenne ihn <b>„In Reisekasse speichern"</b> (oben auf den Namen tippen).</li>' +
-      '<li>Tippe auf das <b>(i)</b>-Symbol, aktiviere <b>„Im Teilen-Sheet anzeigen"</b> und wähle bei „Akzeptiert" <b>URLs</b> und <b>Text</b> aus.</li>' +
-      '<li>Füge die Aktion <b>„URL codieren"</b> hinzu. Als Eingabe die <b>Kurzbefehl-Eingabe</b> wählen.</li>' +
-      '<li>Füge die Aktion <b>„Text"</b> hinzu, tippe hinein:<br>' +
-      '<code style="display:block;background:var(--bg-sunken);padding:8px 10px;border-radius:8px;margin:4px 0;word-break:break-all">' + App.escapeHtml(base + '?spot=') + '</code>' +
-      'und füge direkt danach (Cursor ans Ende) die Variable <b>„Codierte URL"</b> aus Schritt 4 ein.</li>' +
-      '<li>Füge zuletzt die Aktion <b>„URLs öffnen"</b> hinzu, Eingabe = der Text aus Schritt 5.</li>' +
-      '<li>Fertig. Zum Testen: In TikTok bei einem Video auf <b>Teilen</b> → <b>Mehr</b> → <b>„In Reisekasse speichern"</b> aktivieren.</li>' +
-      '</ol>' +
-      (url ? '' : '<p class="field-hint" style="margin-top:10px">Trag oben zuerst deine App-Adresse ein, dann zeigt Schritt 5 genau den richtigen Text.</p>');
-  }
-  renderShortcutGuide();
-  App.qs('#s-app-url', container).addEventListener('input', renderShortcutGuide);
+async function renderWechselkurse(container) {
+  const trips = await Trips.all();
+  const relevantCurrencies = Array.from(new Set(['EUR', ...trips.flatMap((t) => (t.countries || []).map((c) => Countries.currency(c)))]));
+  const rateRows = await Rates.getAll();
+  const rateMap = {};
+  rateRows.forEach((r) => { rateMap[r.code] = r; });
 
-  App.qs('#s-save-spot-settings', container).addEventListener('click', async () => {
-    const url = App.qs('#s-app-url', container).value.trim();
-    const key = App.qs('#s-claude-key', container).value.trim();
-    await DB.put('settings', { key: 'appUrl', value: url });
-    await DB.put('settings', { key: 'claudeApiKey', value: key });
-    App.toast('Gespeichert');
-  });
+  container.innerHTML =
+    '<div class="card">' +
+    '<p class="muted mt-0">Einheiten Fremdwährung pro 1 EUR. Beim Erfassen einer Ausgabe wird der aktuelle Kurs automatisch gespeichert.</p>' +
+    '<button class="btn primary" id="s-rates-update" style="margin-bottom:12px">Kurse online aktualisieren</button>' +
+    '<div id="s-rates-list"></div>' +
+    '<input id="s-rates-search" class="search-input" type="text" placeholder="Weitere Währung suchen (z. B. USD)…" style="margin-top:10px">' +
+    '<div id="s-rates-search-results"></div>' +
+    '</div>';
 
   function renderRateRow(code) {
     const rec = rateMap[code] || { rate: DEFAULT_RATES[code] || 1, source: 'default' };
@@ -231,7 +262,7 @@ Views.settings = async function (container) {
     try {
       const result = await Rates.fetchFromApi();
       App.toast(result.count + ' Kurse aktualisiert');
-      Views.settings(container);
+      renderWechselkurse(container);
     } catch (err) {
       App.toast('Keine Verbindung – Kurse unverändert');
       btn.disabled = false;
@@ -247,6 +278,65 @@ Views.settings = async function (container) {
     searchResults.innerHTML = matches.map(renderRateRow).join('');
     wireRateInputs(searchResults);
   });
+}
+
+async function renderSpotSettings(container) {
+  const appUrl = (await DB.get('settings', 'appUrl'));
+  const apiKeyRow = await DB.get('settings', 'claudeApiKey');
+
+  container.innerHTML =
+    '<div class="card">' +
+    '<div class="field"><label>App-Adresse (für Teilen aus TikTok &amp; Co.)</label>' +
+    '<input id="s-app-url" type="url" placeholder="https://dein-name.github.io/reise-app/" value="' + App.escapeHtml((appUrl && appUrl.value) || '') + '"></div>' +
+    '<p class="field-hint mt-0">Trag hier die Adresse ein, unter der die App später auf GitHub Pages erreichbar ist (inkl. <code>index.html</code>, falls nötig).</p>' +
+    '<div class="field"><label>Claude API-Schlüssel (optional, für KI-Vorschläge)</label>' +
+    '<input id="s-claude-key" type="password" placeholder="sk-ant-…" value="' + App.escapeHtml((apiKeyRow && apiKeyRow.value) || '') + '" autocomplete="off"></div>' +
+    '<p class="field-hint mt-0">Bleibt ausschließlich auf diesem Gerät gespeichert. Ohne Schlüssel funktionieren Link-Speichern, oEmbed und Texterkennung trotzdem.</p>' +
+    '<button class="btn" id="s-save-spot-settings" style="margin-top:6px">Speichern</button>' +
+    '</div>' +
+    '<div class="section-title">iOS-Kurzbefehl einrichten</div>' +
+    '<div class="card" id="s-shortcut-guide"></div>';
+
+  function renderShortcutGuide() {
+    const url = App.qs('#s-app-url', container).value.trim().replace(/\/$/, '');
+    const base = url || 'https://dein-name.github.io/reise-app';
+    App.qs('#s-shortcut-guide', container).innerHTML =
+      '<ol style="margin:0;padding-left:20px;font-size:14px;line-height:1.7">' +
+      '<li>Öffne die <b>Kurzbefehle</b>-App → tippe oben rechts auf <b>+</b> für einen neuen Kurzbefehl.</li>' +
+      '<li>Benenne ihn <b>„In Reisekasse speichern"</b> (oben auf den Namen tippen).</li>' +
+      '<li>Tippe auf das <b>(i)</b>-Symbol, aktiviere <b>„Im Teilen-Sheet anzeigen"</b> und wähle bei „Akzeptiert" <b>URLs</b> und <b>Text</b> aus.</li>' +
+      '<li>Füge die Aktion <b>„URL codieren"</b> hinzu. Als Eingabe die <b>Kurzbefehl-Eingabe</b> wählen.</li>' +
+      '<li>Füge die Aktion <b>„Text"</b> hinzu, tippe hinein:<br>' +
+      '<code style="display:block;background:var(--bg-sunken);padding:8px 10px;border-radius:8px;margin:4px 0;word-break:break-all">' + App.escapeHtml(base + '?spot=') + '</code>' +
+      'und füge direkt danach (Cursor ans Ende) die Variable <b>„Codierte URL"</b> aus Schritt 4 ein.</li>' +
+      '<li>Füge zuletzt die Aktion <b>„URLs öffnen"</b> hinzu, Eingabe = der Text aus Schritt 5.</li>' +
+      '<li>Fertig. Zum Testen: In TikTok bei einem Video auf <b>Teilen</b> → <b>Mehr</b> → <b>„In Reisekasse speichern"</b> aktivieren.</li>' +
+      '</ol>' +
+      (url ? '' : '<p class="field-hint" style="margin-top:10px">Trag oben zuerst deine App-Adresse ein, dann zeigt Schritt 5 genau den richtigen Text.</p>');
+  }
+  renderShortcutGuide();
+  App.qs('#s-app-url', container).addEventListener('input', renderShortcutGuide);
+
+  App.qs('#s-save-spot-settings', container).addEventListener('click', async () => {
+    const url = App.qs('#s-app-url', container).value.trim();
+    const key = App.qs('#s-claude-key', container).value.trim();
+    await DB.put('settings', { key: 'appUrl', value: url });
+    await DB.put('settings', { key: 'claudeApiKey', value: key });
+    App.toast('Gespeichert');
+  });
+}
+
+async function renderBackupSettings(container) {
+  container.innerHTML =
+    '<div class="card">' +
+    '<p class="muted mt-0">Sichere alle Daten als Datei oder spiele ein Backup zurück.</p>' +
+    '<div class="btn-row" style="margin-top:0">' +
+    '<button class="btn" id="s-export">Exportieren</button>' +
+    '<button class="btn" id="s-import">Importieren</button>' +
+    '</div>' +
+    '<input id="s-import-file" type="file" accept="application/json" hidden>' +
+    '</div>' +
+    '<p class="muted center" style="margin-top:24px">Alle Daten bleiben ausschließlich auf diesem Gerät (zusätzlich in deinem Konto, falls angemeldet).</p>';
 
   App.qs('#s-export', container).addEventListener('click', async () => {
     await Backup.downloadExport();
@@ -267,7 +357,7 @@ Views.settings = async function (container) {
     }
     e.target.value = '';
   });
-};
+}
 
 App.applyTheme = function (mode) {
   if (mode === 'light' || mode === 'dark') {
@@ -327,7 +417,7 @@ async function route() {
   App.setTripTabs(null);
   if (parts[0] === 'trips') await Views.trips(view);
   else if (parts[0] === 'spots') await Views.spots(view);
-  else if (parts[0] === 'settings') await Views.settings(view);
+  else if (parts[0] === 'settings') await Views.settings(view, parts[1]);
   else await Views.map(view);
 }
 App.refresh = route;

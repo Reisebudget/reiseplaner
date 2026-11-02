@@ -74,6 +74,13 @@ const Auth = {
     return { status: 'downloaded' };
   },
 
+  async updateUsername(username) {
+    if (!Auth.client) throw new Error('Kein Internet – gerade nicht möglich');
+    const { data, error } = await Auth.client.auth.updateUser({ data: { username } });
+    if (error) throw error;
+    Auth.session = Object.assign({}, Auth.session, { user: data.user });
+  },
+
   async signOut() {
     if (Auth.client) await Auth.client.auth.signOut();
     Auth.session = null;

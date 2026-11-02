@@ -1,7 +1,7 @@
 // IndexedDB-Wrapper. Alle Daten bleiben lokal auf dem Gerät.
 const DB = (() => {
   const NAME = 'reiseapp-db';
-  const VERSION = 3;
+  const VERSION = 4;
   let dbPromise = null;
   let changeListener = null;
 
@@ -47,6 +47,9 @@ const DB = (() => {
         }
         if (!db.objectStoreNames.contains('spotFolders')) {
           db.createObjectStore('spotFolders', { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains('emergencyItems')) {
+          db.createObjectStore('emergencyItems', { keyPath: 'id' });
         }
       };
       req.onsuccess = () => resolve(req.result);
@@ -106,7 +109,7 @@ const DB = (() => {
     return 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
   }
 
-  const ALL_STORES = ['trips', 'bookings', 'packingTemplates', 'packingItems', 'expenses', 'rates', 'settings', 'spots', 'spotFolders'];
+  const ALL_STORES = ['trips', 'bookings', 'packingTemplates', 'packingItems', 'expenses', 'rates', 'settings', 'spots', 'spotFolders', 'emergencyItems'];
 
   return { open, put, get, getAll, getAllByIndex, remove, clear, uid, ALL_STORES, setChangeListener };
 })();

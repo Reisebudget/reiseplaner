@@ -193,8 +193,9 @@ const Trips = {
 
   openEditSheet(trip, prefillCountry) {
     const isNew = !trip;
-    const data = trip || { name: '', startDate: App.today(), endDate: App.today(), countries: prefillCountry ? [prefillCountry] : [], budget: 0 };
+    const data = trip || { name: '', startDate: App.today(), endDate: App.today(), countries: prefillCountry ? [prefillCountry] : [], budget: 0, people: [] };
     let selected = (data.countries || []).slice();
+    let people = (data.people || []).slice();
 
     App.openSheet(isNew ? 'Neuer Trip' : 'Trip bearbeiten', (body) => {
       body.innerHTML =
@@ -209,6 +210,12 @@ const Trips = {
         '<div id="f-country-chips" class="chip-select" style="margin-bottom:8px"></div>' +
         '<div id="f-country-list" class="chip-select chip-scroll"></div>' +
         '</div>' +
+        '<div class="field"><label>Mitreisende (für Ausgaben-Aufteilung)</label>' +
+        '<div id="f-people-chips" class="chip-select" style="margin-bottom:8px"></div>' +
+        '<div class="field-row" style="margin-bottom:0">' +
+        '<div class="field" style="margin-bottom:0"><input id="f-people-input" type="text" placeholder="Name hinzufügen…"></div>' +
+        '<button type="button" class="btn" id="f-people-add" style="width:auto;flex:none;padding:0 16px">+</button>' +
+        '</div></div>' +
         (isNew ? '' : '<button class="btn danger" id="f-delete" style="margin-bottom:10px">Trip löschen</button>') +
         '<div class="btn-row"><button class="btn ghost" id="f-cancel">Abbrechen</button><button class="btn primary" id="f-save">Speichern</button></div>';
 
@@ -246,6 +253,32 @@ const Trips = {
       renderChips(); renderList('');
       App.qs('#f-country-search', body).addEventListener('input', (e) => renderList(e.target.value));
 
+      const peopleChipsBox = App.qs('#f-people-chips', body);
+      function renderPeopleChips() {
+        peopleChipsBox.innerHTML = people.map((p, i) =>
+          '<span class="chip selected" data-person-idx="' + i + '">' + App.escapeHtml(p) + '<span class="x">✕</span></span>'
+        ).join('');
+        App.qsa('[data-person-idx]', peopleChipsBox).forEach((chip) => {
+          chip.addEventListener('click', () => {
+            people.splice(Number(chip.dataset.personIdx), 1);
+            renderPeopleChips();
+          });
+        });
+      }
+      renderPeopleChips();
+      function addPerson() {
+        const input = App.qs('#f-people-input', body);
+        const name = input.value.trim();
+        if (!name || people.includes(name)) { input.value = ''; return; }
+        people.push(name);
+        input.value = '';
+        renderPeopleChips();
+      }
+      App.qs('#f-people-add', body).addEventListener('click', addPerson);
+      App.qs('#f-people-input', body).addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); addPerson(); }
+      });
+
       App.qs('#f-cancel', body).addEventListener('click', () => App.closeSheet());
       if (!isNew) {
         App.qs('#f-delete', body).addEventListener('click', async () => {
@@ -263,7 +296,7 @@ const Trips = {
         const budget = App.parseDecimal(App.qs('#f-budget', body).value);
         if (!name) { App.toast('Bitte einen Namen eingeben'); return; }
         if (!startDate || !endDate) { App.toast('Bitte Start- und Enddatum wählen'); return; }
-        const saved = await Trips.save({ id: data.id, name, startDate, endDate, budget, countries: selected });
+        const saved = await Trips.save({ id: data.id, name, startDate, endDate, budget, countries: selected, people });
         App.closeSheet();
         App.toast('Gespeichert');
         if (App.refresh) App.refresh();
