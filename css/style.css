@@ -423,9 +423,43 @@ button, input, select, textarea { font-family: inherit; font-size: 16px; color: 
   accent-color: var(--accent);
   flex: none;
 }
-.checkrow .text { flex: 1; font-size: 15px; }
-.checkrow.checked .text { text-decoration: line-through; color: var(--text-muted); }
 .checkrow .del { background: none; border: none; color: var(--text-muted); font-size: 18px; padding: 10px; cursor: pointer; }
+.checkrow-body { flex: 1; min-width: 0; cursor: pointer; }
+.checkrow .text { font-size: 15px; }
+.checkrow.checked .text { text-decoration: line-through; color: var(--text-muted); }
+.item-note { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.item-tags { margin-left: 8px; }
+.item-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--accent-soft);
+  color: var(--accent);
+  margin-right: 4px;
+}
+
+.section-block { margin-bottom: 14px; }
+.section-header-row { display: flex; align-items: center; gap: 4px; }
+.section-header {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  padding: 8px 2px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-height: var(--tap);
+}
+.section-header .chev { color: var(--text-muted); font-size: 12px; }
+.section-header .title { font-weight: 700; flex: 1; }
+.section-edit { background: none; border: none; color: var(--text-muted); font-size: 16px; padding: 8px; cursor: pointer; }
+.section-hint { font-size: 12px; color: var(--text-muted); margin: -4px 0 6px 2px; }
 
 .tabline {
   display: flex;
