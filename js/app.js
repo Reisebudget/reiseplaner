@@ -15,12 +15,20 @@ Views.settings = async function (container) {
 
   const appUrl = (await DB.get('settings', 'appUrl'));
   const apiKeyRow = await DB.get('settings', 'claudeApiKey');
+  const extraPinned = await App.extraPinnedCurrencies();
 
   container.innerHTML =
     '<div class="section-title">Darstellung</div>' +
     '<div class="card"><div class="tabline" id="s-theme">' +
     '<button data-v="light">Hell</button><button data-v="dark">Dunkel</button><button data-v="system">System</button>' +
     '</div></div>' +
+
+    '<div class="section-title">Bedienungshilfen</div>' +
+    '<div class="card">' +
+    '<p class="muted mt-0">EUR ist immer angepinnt und steht überall zuoberst. Weitere Währungen, die du oft brauchst, kannst du hier zusätzlich anpinnen.</p>' +
+    '<div class="chip-select" id="s-pinned-currencies" style="margin-bottom:10px"></div>' +
+    '<button class="btn" id="s-pin-currency">+ Währung anpinnen</button>' +
+    '</div>' +
 
     '<div class="section-title">Spot-Sammlung</div>' +
     '<div class="card">' +
@@ -63,6 +71,30 @@ Views.settings = async function (container) {
       await DB.put('settings', { key: 'theme', value: btn.dataset.v });
       App.applyTheme(btn.dataset.v);
       App.qsa('#s-theme button', container).forEach((b) => b.classList.toggle('active', b === btn));
+    });
+  });
+
+  function renderPinnedCurrencies() {
+    const box = App.qs('#s-pinned-currencies', container);
+    box.innerHTML = '<span class="chip selected">📌 EUR</span>' +
+      extraPinned.map((c) => '<span class="chip selected" data-unpin="' + c + '">📌 ' + c + '<span class="x">✕</span></span>').join('');
+    App.qsa('[data-unpin]', box).forEach((chip) => {
+      chip.addEventListener('click', async () => {
+        const list = await App.toggleExtraPinnedCurrency(chip.dataset.unpin);
+        extraPinned.length = 0; extraPinned.push(...list);
+        renderPinnedCurrencies();
+      });
+    });
+  }
+  renderPinnedCurrencies();
+  App.qs('#s-pin-currency', container).addEventListener('click', () => {
+    App.openCurrencyPickerSheet({
+      title: 'Währung anpinnen',
+      onSelect: async (code) => {
+        const list = await App.toggleExtraPinnedCurrency(code);
+        extraPinned.length = 0; extraPinned.push(...list);
+        renderPinnedCurrencies();
+      },
     });
   });
 

@@ -31,12 +31,29 @@ const MapView = {
     App.qsa('.spot-pin', svg).forEach((el) => el.remove());
   },
 
+  // Nutzt präzise KI-/manuelle Koordinaten, wenn vorhanden, sonst automatisch
+  // die Koordinaten des zugeordneten Landes (mit stabilem kleinen Versatz,
+  // damit mehrere Ideen im selben Land nicht exakt übereinander liegen).
+  effectiveCoords(spot) {
+    if (typeof spot.lat === 'number' && typeof spot.lng === 'number') return { lat: spot.lat, lng: spot.lng };
+    if (!spot.country) return null;
+    const base = Countries.latLng(spot.country);
+    if (!base) return null;
+    let hash = 0;
+    for (let i = 0; i < spot.id.length; i++) hash = (hash * 31 + spot.id.charCodeAt(i)) >>> 0;
+    const angle = (hash % 360) * Math.PI / 180;
+    const dist = 0.15 + (hash % 100) / 100 * 0.25;
+    return { lat: base.lat + Math.sin(angle) * dist, lng: base.lng + Math.cos(angle) * dist };
+  },
+
   renderPins(svg, spots) {
     MapView.removePins(svg);
     const svgNS = 'http://www.w3.org/2000/svg';
     const scale = 1.3;
-    spots.filter((s) => typeof s.lat === 'number' && typeof s.lng === 'number').forEach((s) => {
-      const { x, y } = MapView.latLngToXY(s.lat, s.lng);
+    spots.forEach((s) => {
+      const coords = MapView.effectiveCoords(s);
+      if (!coords) return;
+      const { x, y } = MapView.latLngToXY(coords.lat, coords.lng);
       const g = document.createElementNS(svgNS, 'g');
       g.setAttribute('class', 'spot-pin');
       g.setAttribute('data-spot-id', s.id);

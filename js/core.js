@@ -176,9 +176,57 @@ const App = {
     return map;
   },
 
-  currencyCodesSorted() {
-    const rest = Object.keys(DEFAULT_RATES).filter((c) => c !== 'EUR').sort();
-    return ['EUR', ...rest];
+  // EUR ist immer angepinnt. Zusätzliche angepinnte Währungen stehen in den Einstellungen.
+  async extraPinnedCurrencies() {
+    const row = await DB.get('settings', 'pinnedCurrencies');
+    return (row && row.value) || [];
+  },
+
+  async pinnedCurrencies() {
+    return ['EUR', ...(await App.extraPinnedCurrencies())];
+  },
+
+  async toggleExtraPinnedCurrency(code) {
+    if (code === 'EUR') return App.extraPinnedCurrencies();
+    const list = await App.extraPinnedCurrencies();
+    const idx = list.indexOf(code);
+    if (idx === -1) list.push(code); else list.splice(idx, 1);
+    await DB.put('settings', { key: 'pinnedCurrencies', value: list });
+    return list;
+  },
+
+  // Durchsuchbare Währungsauswahl: angepinnte Währungen oben, Trennlinie, dann der Rest.
+  async openCurrencyPickerSheet(opts) {
+    opts = opts || {};
+    const pinned = await App.pinnedCurrencies();
+    const rest = Object.keys(DEFAULT_RATES).filter((c) => !pinned.includes(c)).sort();
+
+    App.openSheet(opts.title || 'Währung wählen', (body) => {
+      body.innerHTML = '<input id="cur-search" class="search-input" type="text" placeholder="Währung suchen…"><div id="cur-list" class="picker-list"></div>';
+
+      function row(code) {
+        return '<button class="list-item" data-code="' + code + '" style="padding:12px 14px">' +
+          '<div class="main"><div class="title">' + (pinned.includes(code) ? '📌 ' : '') + code + '</div></div>' +
+          (code === opts.selected ? '<span class="chev">✓</span>' : '<span class="chev">›</span>') +
+          '</button>';
+      }
+
+      function render(filter) {
+        const f = (filter || '').trim().toUpperCase();
+        const list = App.qs('#cur-list', body);
+        if (f) {
+          const matches = [...pinned, ...rest].filter((c) => c.includes(f));
+          list.innerHTML = matches.length ? matches.map(row).join('') : '<p class="muted center">Keine Treffer</p>';
+        } else {
+          list.innerHTML = pinned.map(row).join('') + '<div class="picker-divider">Weitere Währungen</div>' + rest.map(row).join('');
+        }
+        App.qsa('[data-code]', list).forEach((btn) => {
+          btn.addEventListener('click', () => { App.closeSheet(); opts.onSelect(btn.dataset.code); });
+        });
+      }
+      render('');
+      App.qs('#cur-search', body).addEventListener('input', (e) => render(e.target.value));
+    });
   },
 
   toEUR(amount, currency, ratesMap) {

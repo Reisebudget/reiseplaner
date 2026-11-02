@@ -52,8 +52,6 @@ const Bookings = {
       dateStart: App.today(), timeStart: '', dateEnd: '', timeEnd: '',
       price: 0, currency: Countries.currency(trip.countries[0] || 'EUR'), status: 'offen', refNumber: '', note: '',
     };
-    const currencyOptions = App.currencyCodesSorted();
-
     App.openSheet(isNew ? 'Neue Buchung' : 'Buchung bearbeiten', (body) => {
       body.innerHTML =
         '<div class="field"><label>Titel</label><input id="f-title" type="text" value="' + App.escapeHtml(data.title) + '" placeholder="z. B. Flug Berlin–Casablanca"></div>' +
@@ -75,7 +73,7 @@ const Bookings = {
         '</div>' +
         '<div class="field-row">' +
         '<div class="field"><label>Preis</label><input id="f-price" type="text" inputmode="decimal" value="' + (data.price || 0).toString().replace('.', ',') + '"></div>' +
-        '<div class="field"><label>Währung</label><select id="f-currency">' + currencyOptions.map((c) => '<option value="' + c + '"' + (c === data.currency ? ' selected' : '') + '>' + c + '</option>').join('') + '</select></div>' +
+        '<div class="field"><label>Währung</label><button type="button" class="field-select-btn" id="f-currency-btn"></button></div>' +
         '</div>' +
         '<div class="field"><label>Status</label><select id="f-status">' + BOOKING_STATUS_KEYS.map((k) => '<option value="' + k + '"' + (k === data.status ? ' selected' : '') + '>' + BOOKING_STATUS_LABELS[k] + '</option>').join('') + '</select></div>' +
         '<div class="field"><label>Buchungs-/Flugnummer</label><input id="f-ref" type="text" value="' + App.escapeHtml(data.refNumber) + '"></div>' +
@@ -84,19 +82,32 @@ const Bookings = {
         '<div class="btn-row"><button class="btn ghost" id="f-cancel">Abbrechen</button><button class="btn primary" id="f-save">Speichern</button></div>';
 
       let selectedCountry = data.country;
+      let selectedCurrency = data.currency;
       const countryBtn = App.qs('#f-country-btn', body);
+      const currencyBtn = App.qs('#f-currency-btn', body);
       function updateCountryBtn() {
         countryBtn.innerHTML = '<span>' + Countries.flagEmoji(selectedCountry) + ' ' + App.escapeHtml(Countries.name(selectedCountry)) + '</span><span class="chev">›</span>';
       }
+      function updateCurrencyBtn() {
+        currencyBtn.innerHTML = '<span>' + selectedCurrency + '</span><span class="chev">›</span>';
+      }
       updateCountryBtn();
+      updateCurrencyBtn();
       countryBtn.addEventListener('click', () => {
         Countries.openPickerSheet({
           title: 'Land auswählen', selected: selectedCountry, codes: trip.countries,
           onSelect: (code) => {
             selectedCountry = code;
+            selectedCurrency = Countries.currency(code);
             updateCountryBtn();
-            App.qs('#f-currency', body).value = Countries.currency(code);
+            updateCurrencyBtn();
           },
+        });
+      });
+      currencyBtn.addEventListener('click', () => {
+        App.openCurrencyPickerSheet({
+          title: 'Währung wählen', selected: selectedCurrency,
+          onSelect: (code) => { selectedCurrency = code; updateCurrencyBtn(); },
         });
       });
 
@@ -120,7 +131,7 @@ const Bookings = {
           from: App.qs('#f-from', body).value.trim(), to: App.qs('#f-to', body).value.trim(),
           dateStart, timeStart: App.qs('#f-time-start', body).value,
           dateEnd: App.qs('#f-date-end', body).value, timeEnd: App.qs('#f-time-end', body).value,
-          price: App.parseDecimal(App.qs('#f-price', body).value), currency: App.qs('#f-currency', body).value,
+          price: App.parseDecimal(App.qs('#f-price', body).value), currency: selectedCurrency,
           status: App.qs('#f-status', body).value, refNumber: App.qs('#f-ref', body).value.trim(),
           note: App.qs('#f-note', body).value.trim(),
         });
