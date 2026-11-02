@@ -42,15 +42,15 @@ const Expenses = {
       '</div>' +
       '<div class="field"><label>Datum</label><input id="e-date" type="date" value="' + App.today() + '"></div>' +
       '<div class="field"><label>Notiz</label><input id="e-note" type="text" placeholder="optional"></div>' +
-      (trip.people && trip.people.length ? '<div class="field"><label>Aufteilen zwischen</label><div id="e-people-chips" class="chip-select" style="margin-bottom:0"></div></div>' : '') +
+      (trip.people && trip.people.length ? '<div class="field"><label>Mit wem noch teilen? (du bist automatisch dabei)</label><div id="e-people-chips" class="chip-select" style="margin-bottom:0"></div></div>' : '') +
       '<button class="btn primary" id="e-save">Ausgabe speichern</button>' +
       '</div>' +
       '<div class="card-row" style="margin-bottom:10px"><span class="label">Gesamt ausgegeben</span><span class="value">' + App.formatMoney(total, 'EUR') + '</span></div>' +
       '<div id="e-list">' + (rows.length === 0 ? '<div class="empty-state"><div class="big">💳</div>Noch keine Ausgaben erfasst.</div>' : rows.map(row).join('')) + '</div>';
 
     function row(r) {
-      const split = r.splitWith && r.splitWith.length >= 2
-        ? '<br><span class="muted">geteilt mit ' + r.splitWith.length + ' Personen · ' + App.formatMoney(r.amount / r.splitWith.length, r.currency) + ' pro Person</span>' : '';
+      const split = r.splitWith && r.splitWith.length >= 1
+        ? '<br><span class="muted">Aufgeteilt auf ' + (r.splitWith.length + 1) + ' Personen (inkl. dir) · ' + App.formatMoney(r.amount / (r.splitWith.length + 1), r.currency) + ' pro Person</span>' : '';
       return '<button class="list-item" data-id="' + r.id + '" style="align-items:flex-start">' +
         '<div class="main"><div class="title">' + CATEGORY_LABELS[r.category] + ' · ' + App.escapeHtml(Countries.name(r.country)) + '</div>' +
         '<div class="sub">' + App.formatDate(r.date) + (r.note ? ' · ' + App.escapeHtml(r.note) : '') + split + '</div></div>' +
@@ -138,7 +138,7 @@ const Expenses = {
         '</div>' +
         '<div class="field"><label>Datum</label><input id="x-date" type="date" value="' + expense.date + '"></div>' +
         '<div class="field"><label>Notiz</label><input id="x-note" type="text" value="' + App.escapeHtml(expense.note || '') + '"></div>' +
-        (trip.people && trip.people.length ? '<div class="field"><label>Aufteilen zwischen</label><div id="x-people-chips" class="chip-select" style="margin-bottom:8px"></div></div>' : '') +
+        (trip.people && trip.people.length ? '<div class="field"><label>Mit wem noch teilen? (du bist automatisch dabei)</label><div id="x-people-chips" class="chip-select" style="margin-bottom:8px"></div></div>' : '') +
         '<button class="btn danger" id="x-delete" style="margin-bottom:10px">Ausgabe löschen</button>' +
         '<div class="btn-row"><button class="btn ghost" id="x-cancel">Abbrechen</button><button class="btn primary" id="x-save">Speichern</button></div>';
 

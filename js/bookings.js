@@ -30,10 +30,12 @@ const Bookings = {
     }
     container.innerHTML = rows.map((b) => {
       const route = (b.from || b.to) ? App.escapeHtml((b.from || '') + ' → ' + (b.to || '')) : '';
-      return '<button class="list-item" data-id="' + b.id + '">' +
+      const split = b.splitWith && b.splitWith.length >= 1
+        ? '<br>Aufgeteilt auf ' + (b.splitWith.length + 1) + ' Personen (inkl. dir) · ' + App.formatMoney(b.price / (b.splitWith.length + 1), b.currency) + ' pro Person' : '';
+      return '<button class="list-item" data-id="' + b.id + '" style="align-items:flex-start">' +
         '<div class="main"><div class="title">' + App.escapeHtml(b.title || BOOKING_TYPE_LABELS[b.type]) + '</div>' +
         '<div class="sub">' + BOOKING_TYPE_LABELS[b.type] + ' · ' + App.escapeHtml(Countries.name(b.country)) + (route ? ' · ' + route : '') + '<br>' +
-        App.formatDate(b.dateStart) + (b.timeStart ? ', ' + b.timeStart : '') + '</div></div>' +
+        App.formatDate(b.dateStart) + (b.timeStart ? ', ' + b.timeStart : '') + split + '</div></div>' +
         '<div class="trailing">' + App.formatMoney(b.price, b.currency) + '<br><span class="badge ' + BOOKING_STATUS_BADGE[b.status] + '">' + BOOKING_STATUS_LABELS[b.status] + '</span></div>' +
         '</button>';
     }).join('');
@@ -50,7 +52,7 @@ const Bookings = {
     const data = booking || {
       title: '', type: 'flug', country: trip.countries[0] || '', from: '', to: '',
       dateStart: App.today(), timeStart: '', dateEnd: '', timeEnd: '',
-      price: 0, currency: Countries.currency(trip.countries[0] || 'EUR'), status: 'offen', refNumber: '', note: '',
+      price: 0, currency: Countries.currency(trip.countries[0] || 'EUR'), status: 'offen', refNumber: '', note: '', splitWith: [],
     };
     App.openSheet(isNew ? 'Neue Buchung' : 'Buchung bearbeiten', (body) => {
       body.innerHTML =
@@ -78,6 +80,7 @@ const Bookings = {
         '<div class="field"><label>Status</label><select id="f-status">' + BOOKING_STATUS_KEYS.map((k) => '<option value="' + k + '"' + (k === data.status ? ' selected' : '') + '>' + BOOKING_STATUS_LABELS[k] + '</option>').join('') + '</select></div>' +
         '<div class="field"><label>Buchungs-/Flugnummer</label><input id="f-ref" type="text" value="' + App.escapeHtml(data.refNumber) + '"></div>' +
         '<div class="field"><label>Notiz</label><textarea id="f-note">' + App.escapeHtml(data.note) + '</textarea></div>' +
+        (trip.people && trip.people.length ? '<div class="field"><label>Mit wem noch teilen? (du bist automatisch dabei)</label><div id="f-people-chips" class="chip-select" style="margin-bottom:8px"></div></div>' : '') +
         (isNew ? '' : '<button class="btn danger" id="f-delete" style="margin-bottom:10px">Buchung löschen</button>') +
         '<div class="btn-row"><button class="btn ghost" id="f-cancel">Abbrechen</button><button class="btn primary" id="f-save">Speichern</button></div>';
 
@@ -111,6 +114,24 @@ const Bookings = {
         });
       });
 
+      let selectedPeople = (data.splitWith || []).slice();
+      const peopleChipsBox = App.qs('#f-people-chips', body);
+      function renderPeopleChips() {
+        if (!peopleChipsBox) return;
+        peopleChipsBox.innerHTML = trip.people.map((p) =>
+          '<span class="chip' + (selectedPeople.includes(p) ? ' selected' : '') + '" data-person="' + App.escapeHtml(p) + '">' + App.escapeHtml(p) + '</span>'
+        ).join('');
+        App.qsa('[data-person]', peopleChipsBox).forEach((chip) => {
+          chip.addEventListener('click', () => {
+            const name = chip.dataset.person;
+            const idx = selectedPeople.indexOf(name);
+            if (idx === -1) selectedPeople.push(name); else selectedPeople.splice(idx, 1);
+            renderPeopleChips();
+          });
+        });
+      }
+      renderPeopleChips();
+
       App.qs('#f-cancel', body).addEventListener('click', () => App.closeSheet());
       if (!isNew) {
         App.qs('#f-delete', body).addEventListener('click', async () => {
@@ -133,7 +154,7 @@ const Bookings = {
           dateEnd: App.qs('#f-date-end', body).value, timeEnd: App.qs('#f-time-end', body).value,
           price: App.parseDecimal(App.qs('#f-price', body).value), currency: selectedCurrency,
           status: App.qs('#f-status', body).value, refNumber: App.qs('#f-ref', body).value.trim(),
-          note: App.qs('#f-note', body).value.trim(),
+          note: App.qs('#f-note', body).value.trim(), splitWith: selectedPeople,
         });
         App.closeSheet();
         App.toast('Gespeichert');
