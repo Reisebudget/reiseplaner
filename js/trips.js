@@ -158,6 +158,7 @@ const Trips = {
       '<div class="progress-bar' + (over ? ' over' : '') + '"><span style="width:' + pct + '%"></span></div>' +
       '<div class="card-row"><span class="label">Summe gebucht</span><span class="value">' + App.formatMoney(o.summeGebucht, 'EUR') + '</span></div>' +
       '<div class="card-row"><span class="label">Unterwegs ausgegeben</span><span class="value">' + App.formatMoney(o.summeAusgegeben, 'EUR') + '</span></div>' +
+      '<div class="card-row"><span class="label"><b>Gesamt (gebucht + ausgegeben)</b></span><span class="value"><b>' + App.formatMoney(spent, 'EUR') + '</b></span></div>' +
       '<div class="card-row"><span class="label">Bar vor Ort fällig</span><span class="value">' + App.formatMoney(o.barVorOrtFaellig, 'EUR') + '</span></div>' +
       '<p class="field-hint" style="padding:0 2px">Summe aller Buchungen mit Status „Vor Ort zahlen" (nicht aus Ausgaben) – wird unter „Buchungen" beim Anlegen/Bearbeiten gesetzt.</p>' +
       '</div>';
@@ -326,14 +327,23 @@ Views.trips = async function (container, mode, range) {
     '<button data-m="year"' + (mode === 'year' ? ' class="active"' : '') + '>Nach Jahr</button></div>';
 
   if (mode === 'year') {
-    const rangeHtml = '<div class="chip-select" id="trips-range" style="margin-bottom:14px">' +
-      Object.keys(TRIPS_RANGE_LABELS).map((k) =>
-        '<span class="chip' + (range === k ? ' selected' : '') + '" data-range="' + k + '">' + TRIPS_RANGE_LABELS[k] + '</span>'
-      ).join('') + '</div>';
+    const rangeHtml = '<div class="field" style="margin-bottom:14px"><label>Zeitraum</label>' +
+      '<button type="button" class="field-select-btn" id="trips-range-btn"><span>' + TRIPS_RANGE_LABELS[range] + '</span><span class="chev">›</span></button></div>';
     container.innerHTML = toggleHtml + rangeHtml + '<div id="trips-body">Lädt…</div>';
     await Trips.renderPeriodOverview(trips, App.qs('#trips-body', container), range);
-    App.qsa('#trips-range [data-range]', container).forEach((chip) => {
-      chip.addEventListener('click', () => Views.trips(container, mode, chip.dataset.range));
+    App.qs('#trips-range-btn', container).addEventListener('click', () => {
+      App.openSheet('Zeitraum wählen', (body) => {
+        body.innerHTML = Object.keys(TRIPS_RANGE_LABELS).map((k) =>
+          '<button class="list-item" data-range="' + k + '"><div class="main"><div class="title">' + TRIPS_RANGE_LABELS[k] + '</div></div>' +
+          (range === k ? '<span class="chev">✓</span>' : '<span class="chev">›</span>') + '</button>'
+        ).join('');
+        App.qsa('[data-range]', body).forEach((btn) => {
+          btn.addEventListener('click', () => {
+            App.closeSheet();
+            Views.trips(container, mode, btn.dataset.range);
+          });
+        });
+      });
     });
   } else {
     container.innerHTML = toggleHtml + '<div id="trips-body">' + Trips.renderList(trips) + '</div>';
@@ -395,9 +405,10 @@ Trips.renderPeriodOverview = async function (trips, container, range) {
   let html = '<div class="section-title">Gesamt' + (range !== 'all' ? ' – ' + TRIPS_RANGE_LABELS[range] : '') + '</div>' +
     '<div class="card">' +
     '<div class="card-row"><span class="label">Budget gesamt</span><span class="value">' + App.formatMoney(grandBudget, 'EUR') + '</span></div>' +
-    '<div class="card-row"><span class="label">Restbudget</span><span class="value">' + App.formatMoney(grandRest, 'EUR') + '</span></div>' +
     '<div class="card-row"><span class="label">Summe gebucht</span><span class="value">' + App.formatMoney(grandGebucht, 'EUR') + '</span></div>' +
     '<div class="card-row"><span class="label">Unterwegs ausgegeben</span><span class="value">' + App.formatMoney(grandAusgegeben, 'EUR') + '</span></div>' +
+    '<div class="card-row"><span class="label"><b>Gesamt (gebucht + ausgegeben)</b></span><span class="value"><b>' + App.formatMoney(grandGebucht + grandAusgegeben, 'EUR') + '</b></span></div>' +
+    '<div class="card-row"><span class="label">Restbudget</span><span class="value">' + App.formatMoney(grandRest, 'EUR') + '</span></div>' +
     '<div class="card-row"><span class="label">Trips in diesem Zeitraum</span><span class="value">' + filtered.length + '</span></div>' +
     '</div>';
 
@@ -416,9 +427,10 @@ Trips.renderPeriodOverview = async function (trips, container, range) {
     html += '<div class="section-title">' + App.escapeHtml(groupLabel(key)) + ' · ' + groups[key].length + ' Trip' + (groups[key].length === 1 ? '' : 's') + '</div>' +
       '<div class="card">' +
       '<div class="card-row"><span class="label">Budget gesamt</span><span class="value">' + App.formatMoney(budget, 'EUR') + '</span></div>' +
-      '<div class="card-row"><span class="label">Restbudget</span><span class="value">' + App.formatMoney(restbudget, 'EUR') + '</span></div>' +
       '<div class="card-row"><span class="label">Summe gebucht</span><span class="value">' + App.formatMoney(gebucht, 'EUR') + '</span></div>' +
       '<div class="card-row"><span class="label">Unterwegs ausgegeben</span><span class="value">' + App.formatMoney(ausgegeben, 'EUR') + '</span></div>' +
+      '<div class="card-row"><span class="label"><b>Gesamt (gebucht + ausgegeben)</b></span><span class="value"><b>' + App.formatMoney(gebucht + ausgegeben, 'EUR') + '</b></span></div>' +
+      '<div class="card-row"><span class="label">Restbudget</span><span class="value">' + App.formatMoney(restbudget, 'EUR') + '</span></div>' +
       tripRows +
       '</div>';
   });
