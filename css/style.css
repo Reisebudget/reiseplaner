@@ -465,18 +465,19 @@ button, input, select, textarea { font-family: inherit; font-size: 16px; color: 
   touch-action: pan-y pinch-zoom;
 }
 .map-wrap svg [data-country] { cursor: pointer; }
-.spot-pin {
+.spot-pin { cursor: pointer; }
+.spot-pin .spot-pin-icon {
   fill: var(--spot);
   stroke: #fff;
-  stroke-width: 2.5;
+  stroke-width: 1;
   vector-effect: non-scaling-stroke;
-  cursor: pointer;
 }
-.map-wrap svg circle.spot-pin,
-.map-fullscreen-stage svg circle.spot-pin {
+.spot-pin circle { fill: transparent; stroke: none; }
+.map-fullscreen-stage svg path.spot-pin-icon {
   stroke: #fff;
-  stroke-width: 2.5;
+  stroke-width: 1;
 }
+.map-fullscreen-stage svg .spot-pin circle { stroke: none; }
 .map-wrap svg path, .map-wrap svg circle {
   stroke: var(--map-border);
   stroke-width: 0.8;
@@ -576,6 +577,34 @@ button, input, select, textarea { font-family: inherit; font-size: 16px; color: 
   font-size: 22px;
 }
 .spot-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 10px; display: block; }
+.field-select-btn {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 16px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.field-select-btn .chev { color: var(--text-muted); }
+.country-flag-box {
+  width: 48px;
+  height: 48px;
+  flex: none;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
 .spot-flag-badge {
   position: absolute;
   right: -4px;
@@ -716,6 +745,8 @@ button, input, select, textarea { font-family: inherit; font-size: 16px; color: 
 .cat-table tfoot td { font-weight: 700; border-top: 2px solid var(--border); border-bottom: none; }
 .search-input { width: 100%; min-height: var(--tap); padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text); margin-bottom: 10px; }
 .chip-scroll { max-height: 220px; overflow-y: auto; padding: 2px; }
+.picker-list { max-height: 65vh; overflow-y: auto; padding-bottom: 4px; }
+.picker-list .list-item { margin-bottom: 8px; }
 
 .muted { color: var(--text-muted); }
 .right { text-align: right; }

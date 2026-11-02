@@ -217,7 +217,7 @@ const Trips = {
 
       function renderChips() {
         chipsBox.innerHTML = selected.map((c) =>
-          '<span class="chip selected" data-code="' + c + '">' + App.escapeHtml(Countries.name(c)) + '<span class="x">✕</span></span>'
+          '<span class="chip selected" data-code="' + c + '">' + Countries.flagEmoji(c) + ' ' + App.escapeHtml(Countries.name(c)) + '<span class="x">✕</span></span>'
         ).join('');
         App.qsa('.chip', chipsBox).forEach((chip) => {
           chip.addEventListener('click', () => {
@@ -232,7 +232,7 @@ const Trips = {
         const codes = Countries.sortedCodes().filter((c) => !selected.includes(c) && (!f || Countries.name(c).toLowerCase().includes(f)));
         const shown = f ? codes : codes.slice(0, 30);
         listBox.innerHTML = shown.map((c) =>
-          '<span class="chip" data-code="' + c + '">' + App.escapeHtml(Countries.name(c)) + '</span>'
+          '<span class="chip" data-code="' + c + '">' + Countries.flagEmoji(c) + ' ' + App.escapeHtml(Countries.name(c)) + '</span>'
         ).join('') + (!f && codes.length > shown.length ? '<span class="chip" style="opacity:.6" id="f-more">… tippen zum Suchen</span>' : '');
         App.qsa('.chip', listBox).forEach((chip) => {
           if (chip.id === 'f-more') return;

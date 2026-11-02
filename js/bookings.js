@@ -59,7 +59,7 @@ const Bookings = {
         '<div class="field"><label>Titel</label><input id="f-title" type="text" value="' + App.escapeHtml(data.title) + '" placeholder="z. B. Flug Berlin–Casablanca"></div>' +
         '<div class="field-row">' +
         '<div class="field"><label>Art</label><select id="f-type">' + BOOKING_TYPE_KEYS.map((k) => '<option value="' + k + '"' + (k === data.type ? ' selected' : '') + '>' + BOOKING_TYPE_LABELS[k] + '</option>').join('') + '</select></div>' +
-        '<div class="field"><label>Land</label><select id="f-country">' + trip.countries.map((c) => '<option value="' + c + '"' + (c === data.country ? ' selected' : '') + '>' + App.escapeHtml(Countries.name(c)) + '</option>').join('') + '</select></div>' +
+        '<div class="field"><label>Land</label><button type="button" class="field-select-btn" id="f-country-btn"></button></div>' +
         '</div>' +
         '<div class="field-row">' +
         '<div class="field"><label>Von</label><input id="f-from" type="text" value="' + App.escapeHtml(data.from) + '" placeholder="Ort/Flughafen"></div>' +
@@ -83,8 +83,21 @@ const Bookings = {
         (isNew ? '' : '<button class="btn danger" id="f-delete" style="margin-bottom:10px">Buchung löschen</button>') +
         '<div class="btn-row"><button class="btn ghost" id="f-cancel">Abbrechen</button><button class="btn primary" id="f-save">Speichern</button></div>';
 
-      App.qs('#f-country', body).addEventListener('change', (e) => {
-        App.qs('#f-currency', body).value = Countries.currency(e.target.value);
+      let selectedCountry = data.country;
+      const countryBtn = App.qs('#f-country-btn', body);
+      function updateCountryBtn() {
+        countryBtn.innerHTML = '<span>' + Countries.flagEmoji(selectedCountry) + ' ' + App.escapeHtml(Countries.name(selectedCountry)) + '</span><span class="chev">›</span>';
+      }
+      updateCountryBtn();
+      countryBtn.addEventListener('click', () => {
+        Countries.openPickerSheet({
+          title: 'Land auswählen', selected: selectedCountry, codes: trip.countries,
+          onSelect: (code) => {
+            selectedCountry = code;
+            updateCountryBtn();
+            App.qs('#f-currency', body).value = Countries.currency(code);
+          },
+        });
       });
 
       App.qs('#f-cancel', body).addEventListener('click', () => App.closeSheet());
@@ -103,7 +116,7 @@ const Bookings = {
         if (!dateStart) { App.toast('Bitte ein Startdatum wählen'); return; }
         await Bookings.save({
           id: data.id, tripId: trip.id,
-          title, type: App.qs('#f-type', body).value, country: App.qs('#f-country', body).value,
+          title, type: App.qs('#f-type', body).value, country: selectedCountry,
           from: App.qs('#f-from', body).value.trim(), to: App.qs('#f-to', body).value.trim(),
           dateStart, timeStart: App.qs('#f-time-start', body).value,
           dateEnd: App.qs('#f-date-end', body).value, timeEnd: App.qs('#f-time-end', body).value,

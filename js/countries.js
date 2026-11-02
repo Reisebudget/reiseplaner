@@ -271,6 +271,38 @@ const Countries = {
     if (!code || !/^[A-Za-z]{2}$/.test(code)) return '🏳️';
     return code.toUpperCase().replace(/./g, (c) => String.fromCodePoint(127397 + c.charCodeAt(0)));
   },
+
+  // Durchsuchbare Länderauswahl als Bottom-Sheet. opts: { title, selected, codes, onSelect }
+  openPickerSheet(opts) {
+    opts = opts || {};
+    const codes = opts.codes || Countries.sortedCodes();
+    App.openSheet(opts.title || 'Land auswählen', (body) => {
+      body.innerHTML =
+        '<input id="cp-search" class="search-input" type="text" placeholder="Land suchen…" autofocus>' +
+        '<div id="cp-list" class="picker-list"></div>';
+
+      function render(filter) {
+        const f = (filter || '').trim().toLowerCase();
+        const matches = codes.filter((c) => !f || Countries.name(c).toLowerCase().includes(f));
+        const list = App.qs('#cp-list', body);
+        list.innerHTML = matches.length === 0 ? '<p class="muted center">Keine Treffer</p>' : matches.map((c) =>
+          '<button class="list-item" data-code="' + c + '">' +
+          '<div class="country-flag-box" style="background:var(--bg-sunken)">' + Countries.flagEmoji(c) + '</div>' +
+          '<div class="main"><div class="title">' + App.escapeHtml(Countries.name(c)) + '</div></div>' +
+          (c === opts.selected ? '<span class="chev">✓</span>' : '<span class="chev">›</span>') +
+          '</button>'
+        ).join('');
+        App.qsa('[data-code]', list).forEach((btn) => {
+          btn.addEventListener('click', () => {
+            App.closeSheet();
+            opts.onSelect(btn.dataset.code);
+          });
+        });
+      }
+      render('');
+      App.qs('#cp-search', body).addEventListener('input', (e) => render(e.target.value));
+    });
+  },
 };
 
 const CONTINENTS = [

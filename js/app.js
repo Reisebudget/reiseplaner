@@ -203,7 +203,7 @@ function updateBottomNav(key) {
 }
 
 async function route() {
-  App.closeSheet();
+  App.closeAllSheets();
   const hash = location.hash.replace(/^#\/?/, '');
   const parts = hash.split('/').filter(Boolean);
   const view = document.getElementById('view');

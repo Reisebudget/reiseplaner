@@ -24,18 +24,38 @@ const MapView = {
     return { x: 7.103 * lng + 1277.14, y: -8.6064 * lat + 774.9 };
   },
 
-  renderPins(svg, spots) {
+  // Stecknadel-Icon (Material "place"), Spitze bei (0,24) in einem 24x24-Raster.
+  PIN_PATH: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z',
+
+  removePins(svg) {
     App.qsa('.spot-pin', svg).forEach((el) => el.remove());
+  },
+
+  renderPins(svg, spots) {
+    MapView.removePins(svg);
     const svgNS = 'http://www.w3.org/2000/svg';
+    const scale = 1.3;
     spots.filter((s) => typeof s.lat === 'number' && typeof s.lng === 'number').forEach((s) => {
       const { x, y } = MapView.latLngToXY(s.lat, s.lng);
-      const el = document.createElementNS(svgNS, 'circle');
-      el.setAttribute('class', 'spot-pin');
-      el.setAttribute('cx', x);
-      el.setAttribute('cy', y);
-      el.setAttribute('r', 12);
-      el.setAttribute('data-spot-id', s.id);
-      svg.appendChild(el);
+      const g = document.createElementNS(svgNS, 'g');
+      g.setAttribute('class', 'spot-pin');
+      g.setAttribute('data-spot-id', s.id);
+
+      const hit = document.createElementNS(svgNS, 'circle');
+      hit.setAttribute('cx', x);
+      hit.setAttribute('cy', y - 12 * scale);
+      hit.setAttribute('r', 13 * scale);
+      hit.setAttribute('fill', 'transparent');
+      g.appendChild(hit);
+
+      const icon = document.createElementNS(svgNS, 'path');
+      icon.setAttribute('class', 'spot-pin-icon');
+      icon.setAttribute('d', MapView.PIN_PATH);
+      icon.setAttribute('fill-rule', 'evenodd');
+      icon.setAttribute('transform', 'translate(' + (x - 12 * scale) + ',' + (y - 24 * scale) + ') scale(' + scale + ')');
+      g.appendChild(icon);
+
+      svg.appendChild(g);
     });
   },
 };
@@ -54,7 +74,6 @@ Views.map = async function (container) {
     '<span><span class="dot" style="background:var(--visited)"></span>Besucht</span>' +
     '<span><span class="dot" style="background:var(--planned)"></span>Geplant</span>' +
     '<span><span class="dot" style="background:var(--map-default)"></span>Noch nicht</span>' +
-    '<span><span class="dot" style="background:var(--spot)"></span>Idee</span>' +
     '</div></div>' +
     '<div id="map-country-info"></div>' +
     '<div class="stat-row" id="map-stats"></div>' +
@@ -70,7 +89,6 @@ Views.map = async function (container) {
   const svg = holder.querySelector('svg');
   let status = Trips.countryStatusMap(trips, manualVisited);
   MapView.colorSvg(svg, status);
-  MapView.renderPins(svg, spots);
 
   const infoBox = App.qs('#map-country-info', container);
 
@@ -119,10 +137,11 @@ Views.map = async function (container) {
     App.openSheet(label, (body) => {
       body.innerHTML = codes.map((code) => {
         const st = status[code];
-        const color = st === 'visited' ? 'var(--visited)' : st === 'planned' ? 'var(--planned)' : 'var(--map-default)';
-        return '<button class="list-item" data-code="' + code + '" style="margin-bottom:8px">' +
-          '<span class="dot" style="background:' + color + ';flex:none"></span>' +
-          '<div class="main"><div class="title">' + App.escapeHtml(Countries.name(code)) + '</div></div>' +
+        const soft = st === 'visited' ? 'var(--success-soft)' : st === 'planned' ? 'var(--accent-soft)' : 'var(--bg-sunken)';
+        const label = st === 'visited' ? 'Besucht' : st === 'planned' ? 'Geplant' : 'Noch nicht besucht';
+        return '<button class="list-item" data-code="' + code + '">' +
+          '<div class="country-flag-box" style="background:' + soft + '">' + Countries.flagEmoji(code) + '</div>' +
+          '<div class="main"><div class="title">' + App.escapeHtml(Countries.name(code)) + '</div><div class="sub">' + label + '</div></div>' +
           '<span class="chev">›</span></button>';
       }).join('');
       App.qsa('[data-code]', body).forEach((btn) => {
@@ -217,7 +236,7 @@ function openFullscreenMap(svgText, status, spots, onSelectCountry, onSelectSpot
     '</div>' +
     '<div class="map-fullscreen-stage" id="mf-stage">' +
     '<div class="zoom-layer" id="mf-layer"></div>' +
-    '<div class="map-fullscreen-hint">Zum Zoomen zwei Finger nutzen · Doppeltipp setzt zurück</div>' +
+    '<div class="map-fullscreen-hint">Zum Zoomen zwei Finger nutzen · Doppeltipp setzt zurück · 📍 = Idee</div>' +
     '</div>' +
     '<div class="map-fullscreen-info" id="mf-info" hidden></div>';
   document.body.appendChild(overlay);

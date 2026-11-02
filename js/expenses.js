@@ -38,7 +38,7 @@ const Expenses = {
       '</div>' +
       '<div class="field-row">' +
       '<div class="field"><label>Kategorie</label><select id="e-category">' + CATEGORY_KEYS.map((k) => '<option value="' + k + '">' + CATEGORY_LABELS[k] + '</option>').join('') + '</select></div>' +
-      '<div class="field"><label>Land</label><select id="e-country">' + trip.countries.map((c) => '<option value="' + c + '">' + App.escapeHtml(Countries.name(c)) + '</option>').join('') + '</select></div>' +
+      '<div class="field"><label>Land</label><button type="button" class="field-select-btn" id="e-country-btn"></button></div>' +
       '</div>' +
       '<div class="field"><label>Datum</label><input id="e-date" type="date" value="' + App.today() + '"></div>' +
       '<div class="field"><label>Notiz</label><input id="e-note" type="text" placeholder="optional"></div>' +
@@ -55,19 +55,28 @@ const Expenses = {
         (r.currency !== 'EUR' ? '<br><span class="muted">' + App.formatMoney(r.amountEUR, 'EUR') + '</span>' : '') + '</div></button>';
     }
 
-    const countrySel = App.qs('#e-country', container);
     const currencySel = App.qs('#e-currency', container);
-    function syncCurrency() { currencySel.value = Countries.currency(countrySel.value); }
-    countrySel.value = defaultCountry;
+    const countryBtn = App.qs('#e-country-btn', container);
+    let selectedCountry = defaultCountry;
+    function updateCountryBtn() {
+      countryBtn.innerHTML = '<span>' + Countries.flagEmoji(selectedCountry) + ' ' + App.escapeHtml(Countries.name(selectedCountry)) + '</span><span class="chev">›</span>';
+    }
+    function syncCurrency() { currencySel.value = Countries.currency(selectedCountry); }
+    updateCountryBtn();
     syncCurrency();
-    countrySel.addEventListener('change', syncCurrency);
+    countryBtn.addEventListener('click', () => {
+      Countries.openPickerSheet({
+        title: 'Land auswählen', selected: selectedCountry, codes: trip.countries,
+        onSelect: (code) => { selectedCountry = code; updateCountryBtn(); syncCurrency(); },
+      });
+    });
 
     App.qs('#e-save', container).addEventListener('click', async () => {
       const amount = App.parseDecimal(App.qs('#e-amount', container).value);
       if (!amount) { App.toast('Bitte einen Betrag eingeben'); return; }
       await Expenses.save({
         tripId: trip.id, amount, currency: currencySel.value,
-        category: App.qs('#e-category', container).value, country: countrySel.value,
+        category: App.qs('#e-category', container).value, country: selectedCountry,
         date: App.qs('#e-date', container).value || App.today(),
         note: App.qs('#e-note', container).value.trim(),
       });
@@ -92,12 +101,25 @@ const Expenses = {
         '</div>' +
         '<div class="field-row">' +
         '<div class="field"><label>Kategorie</label><select id="x-category">' + CATEGORY_KEYS.map((k) => '<option value="' + k + '"' + (k === expense.category ? ' selected' : '') + '>' + CATEGORY_LABELS[k] + '</option>').join('') + '</select></div>' +
-        '<div class="field"><label>Land</label><select id="x-country">' + trip.countries.map((c) => '<option value="' + c + '"' + (c === expense.country ? ' selected' : '') + '>' + App.escapeHtml(Countries.name(c)) + '</option>').join('') + '</select></div>' +
+        '<div class="field"><label>Land</label><button type="button" class="field-select-btn" id="x-country-btn"></button></div>' +
         '</div>' +
         '<div class="field"><label>Datum</label><input id="x-date" type="date" value="' + expense.date + '"></div>' +
         '<div class="field"><label>Notiz</label><input id="x-note" type="text" value="' + App.escapeHtml(expense.note || '') + '"></div>' +
         '<button class="btn danger" id="x-delete" style="margin-bottom:10px">Ausgabe löschen</button>' +
         '<div class="btn-row"><button class="btn ghost" id="x-cancel">Abbrechen</button><button class="btn primary" id="x-save">Speichern</button></div>';
+
+      let selectedCountry = expense.country;
+      const countryBtn = App.qs('#x-country-btn', body);
+      function updateCountryBtn() {
+        countryBtn.innerHTML = '<span>' + Countries.flagEmoji(selectedCountry) + ' ' + App.escapeHtml(Countries.name(selectedCountry)) + '</span><span class="chev">›</span>';
+      }
+      updateCountryBtn();
+      countryBtn.addEventListener('click', () => {
+        Countries.openPickerSheet({
+          title: 'Land auswählen', selected: selectedCountry, codes: trip.countries,
+          onSelect: (code) => { selectedCountry = code; },
+        });
+      });
 
       App.qs('#x-cancel', body).addEventListener('click', () => App.closeSheet());
       App.qs('#x-delete', body).addEventListener('click', async () => {
@@ -112,7 +134,7 @@ const Expenses = {
         if (!amount) { App.toast('Bitte einen Betrag eingeben'); return; }
         await Expenses.save({
           id: expense.id, tripId: trip.id, amount, currency: App.qs('#x-currency', body).value,
-          category: App.qs('#x-category', body).value, country: App.qs('#x-country', body).value,
+          category: App.qs('#x-category', body).value, country: selectedCountry,
           date: App.qs('#x-date', body).value, note: App.qs('#x-note', body).value.trim(),
         });
         App.closeSheet();

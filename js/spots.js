@@ -223,7 +223,7 @@ const Spots = {
       body.innerHTML = img +
         '<div class="field"><label>Name</label><input id="sp-title" type="text" value="' + App.escapeHtml(spot.title || '') + '" placeholder="z. B. Dachterrasse mit Meerblick"></div>' +
         '<div class="field-row">' +
-        '<div class="field"><label>Land</label><select id="sp-country"><option value="">–</option>' + Countries.sortedCodes().map((c) => '<option value="' + c + '"' + (c === spot.country ? ' selected' : '') + '>' + App.escapeHtml(Countries.name(c)) + '</option>').join('') + '</select></div>' +
+        '<div class="field"><label>Land</label><button type="button" class="field-select-btn" id="sp-country-btn"></button></div>' +
         '<div class="field"><label>Region/Ort</label><input id="sp-region" type="text" value="' + App.escapeHtml(spot.region || '') + '"></div>' +
         '</div>' +
         '<div class="field"><label>Notiz</label><textarea id="sp-note">' + App.escapeHtml(spot.note || '') + '</textarea></div>' +
@@ -243,6 +243,21 @@ const Spots = {
         '<div class="btn-row"><button class="btn ghost" id="sp-cancel">Abbrechen</button><button class="btn primary" id="sp-save">Bestätigen</button></div>';
 
       App.qs('#sp-cancel', body).addEventListener('click', () => App.closeSheet());
+
+      let selectedCountry = spot.country || null;
+      const countryBtn = App.qs('#sp-country-btn', body);
+      function updateCountryBtn() {
+        countryBtn.innerHTML = selectedCountry
+          ? '<span>' + Countries.flagEmoji(selectedCountry) + ' ' + App.escapeHtml(Countries.name(selectedCountry)) + '</span><span class="chev">›</span>'
+          : '<span class="muted">Kein Land ausgewählt</span><span class="chev">›</span>';
+      }
+      updateCountryBtn();
+      countryBtn.addEventListener('click', () => {
+        Countries.openPickerSheet({
+          title: 'Land auswählen', selected: selectedCountry,
+          onSelect: (code) => { selectedCountry = code; updateCountryBtn(); },
+        });
+      });
 
       const folderSelect = App.qs('#sp-folder', body);
       const folderNewRow = App.qs('#sp-folder-new-row', body);
@@ -289,7 +304,7 @@ const Spots = {
         const saved = await Spots.save({
           id: spot.id,
           title: App.qs('#sp-title', body).value.trim() || 'Unbenannter Spot',
-          country: App.qs('#sp-country', body).value || null,
+          country: selectedCountry,
           region: App.qs('#sp-region', body).value.trim() || null,
           note: App.qs('#sp-note', body).value.trim(),
           folderId: folderVal || null,

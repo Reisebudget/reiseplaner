@@ -92,25 +92,33 @@ const App = {
     setTimeout(() => el.remove(), ms || 2200);
   },
 
+  // Sheets stapeln sich (z. B. Länderauswahl über einem Bearbeiten-Formular):
+  // openSheet legt ein neues oben drauf, closeSheet nimmt nur das oberste weg,
+  // das darunter bleibt mit allen eingegebenen Werten erhalten.
+  _sheetStack: [],
+
   openSheet(title, buildFn) {
-    App.closeSheet();
     const backdrop = document.createElement('div');
     backdrop.className = 'modal-backdrop';
-    backdrop.id = 'active-sheet';
     const sheet = document.createElement('div');
     sheet.className = 'modal-sheet';
     sheet.innerHTML = '<div class="modal-handle"></div>' + (title ? '<h2>' + App.escapeHtml(title) + '</h2>' : '') + '<div class="sheet-body"></div>';
     backdrop.appendChild(sheet);
     backdrop.addEventListener('click', (e) => { if (e.target === backdrop) App.closeSheet(); });
     document.getElementById('modal-root').appendChild(backdrop);
+    App._sheetStack.push(backdrop);
     const body = sheet.querySelector('.sheet-body');
     if (buildFn) buildFn(body);
     return body;
   },
 
   closeSheet() {
-    const el = document.getElementById('active-sheet');
+    const el = App._sheetStack.pop();
     if (el) el.remove();
+  },
+
+  closeAllSheets() {
+    while (App._sheetStack.length) App._sheetStack.pop().remove();
   },
 
   setFab(handler, label, icon) {
