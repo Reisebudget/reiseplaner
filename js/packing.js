@@ -13,6 +13,28 @@ const Packing = {
     return item;
   },
 
+  parseBulkText(text) {
+    return text.split('\n')
+      .map((line) => line.trim().replace(/^(?:[-*•●○]|\[\s?[xX]?\s?\]|☐|☑|\d+[.)])\s*/, '').trim())
+      .filter(Boolean);
+  },
+
+  async addBulk(tripId, text) {
+    const lines = Packing.parseBulkText(text);
+    const existing = await Packing.listForTrip(tripId);
+    const existingTexts = new Set(existing.map((i) => i.text.toLowerCase()));
+    let order = existing.reduce((m, r) => Math.max(m, r.sortOrder || 0), 0);
+    let added = 0;
+    for (const line of lines) {
+      if (existingTexts.has(line.toLowerCase())) continue;
+      existingTexts.add(line.toLowerCase());
+      order += 1;
+      await DB.put('packingItems', { id: DB.uid(), tripId, text: line, checked: false, sortOrder: order });
+      added++;
+    }
+    return added;
+  },
+
   async toggle(item) {
     item.checked = !item.checked;
     await DB.put('packingItems', item);
@@ -57,9 +79,12 @@ const Packing = {
       '<div class="field" style="margin-bottom:0"><input id="p-new" type="text" placeholder="Neuer Gegenstand…"></div>' +
       '<button class="btn primary" id="p-add" style="width:auto;flex:none;padding:0 16px">+</button>' +
       '</div></div>' +
-      '<div class="btn-row" style="margin-top:0;margin-bottom:14px">' +
+      '<div class="btn-row" style="margin-top:0;margin-bottom:10px">' +
       '<button class="btn" id="p-template-apply">Vorlage anwenden</button>' +
       '<button class="btn" id="p-template-save">Als Vorlage speichern</button>' +
+      '</div>' +
+      '<div class="btn-row" style="margin-top:0;margin-bottom:14px">' +
+      '<button class="btn" id="p-bulk-add">Liste einfügen</button>' +
       '</div>' +
       '<p class="muted" style="margin-top:-6px">' + checkedCount + ' von ' + items.length + ' gepackt</p>' +
       '<div class="card" id="p-list">' + (items.length === 0 ? '<p class="muted mt-0">Noch keine Gegenstände.</p>' : items.map(row).join('')) + '</div>';
@@ -127,6 +152,23 @@ const Packing = {
             App.closeSheet();
             App.qs('#p-template-apply', container).click();
           });
+        });
+      });
+    });
+
+    App.qs('#p-bulk-add', container).addEventListener('click', () => {
+      App.openSheet('Liste einfügen', (body) => {
+        body.innerHTML =
+          '<p class="field-hint mt-0">Eine Zeile pro Gegenstand einfügen (aus Notizen, ChatGPT & Co.). Aufzählungszeichen wie "-", "•" oder Checkboxen werden automatisch entfernt.</p>' +
+          '<div class="field"><textarea id="p-bulk-text" style="min-height:220px" placeholder="Sonnencreme&#10;Reisepass&#10;Ladekabel&#10;…"></textarea></div>' +
+          '<div class="btn-row"><button class="btn ghost" id="p-bulk-cancel">Abbrechen</button><button class="btn primary" id="p-bulk-save">Übernehmen</button></div>';
+        App.qs('#p-bulk-cancel', body).addEventListener('click', () => App.closeSheet());
+        App.qs('#p-bulk-save', body).addEventListener('click', async () => {
+          const text = App.qs('#p-bulk-text', body).value;
+          const added = await Packing.addBulk(trip.id, text);
+          App.closeSheet();
+          App.toast(added + ' ' + (added === 1 ? 'Gegenstand' : 'Gegenstände') + ' hinzugefügt');
+          Packing.render(trip, container);
         });
       });
     });

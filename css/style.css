@@ -546,6 +546,40 @@ button, input, select, textarea { font-family: inherit; font-size: 16px; color: 
 .continent-card .name { font-weight: 700; font-size: 14px; }
 .continent-card .frac { font-size: 12px; color: var(--text-muted); margin: 2px 0 8px; }
 
+.folder-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+.folder-breadcrumb [data-nav] { cursor: pointer; color: var(--accent); }
+.folder-breadcrumb .current { color: var(--text); font-weight: 600; }
+.folder-breadcrumb .sep { color: var(--text-muted); }
+
+.folder-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.folder-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  text-align: left;
+  color: inherit;
+  font-family: inherit;
+  cursor: pointer;
+}
+.folder-card:active { background: var(--bg-sunken); }
+.folder-card-icon { font-size: 22px; margin-bottom: 6px; }
+.folder-card-name { font-weight: 700; font-size: 14px; }
+.folder-card-count { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
 .visited-toggle {
   display: flex;
   align-items: center;

@@ -36,15 +36,47 @@ const Spots = {
     return rows.sort((a, b) => a.name.localeCompare(b.name, 'de'));
   },
 
-  async createFolder(name) {
-    const folder = { id: DB.uid(), name, createdAt: new Date().toISOString() };
+  subfolders(folders, parentId) {
+    return folders.filter((f) => (f.parentFolderId || null) === (parentId || null))
+      .sort((a, b) => a.name.localeCompare(b.name, 'de'));
+  },
+
+  folderPath(folders, folderId) {
+    const path = [];
+    let current = folders.find((f) => f.id === folderId);
+    while (current) {
+      path.unshift(current);
+      current = folders.find((f) => f.id === current.parentFolderId);
+    }
+    return path;
+  },
+
+  // Ordner als flache, nach Tiefe eingerückte Liste (für <select>-Optionen).
+  flattenFolderTree(folders, parentId, depth) {
+    parentId = parentId || null;
+    depth = depth || 0;
+    let out = [];
+    Spots.subfolders(folders, parentId).forEach((f) => {
+      out.push({ folder: f, depth });
+      out = out.concat(Spots.flattenFolderTree(folders, f.id, depth + 1));
+    });
+    return out;
+  },
+
+  async createFolder(name, parentFolderId) {
+    const folder = { id: DB.uid(), name, parentFolderId: parentFolderId || null, createdAt: new Date().toISOString() };
     await DB.put('spotFolders', folder);
     return folder;
   },
 
   async deleteFolder(id) {
+    const folders = await Spots.folders();
+    const target = folders.find((f) => f.id === id);
+    const parentId = target ? target.parentFolderId : null;
+    const childFolders = folders.filter((f) => f.parentFolderId === id);
+    for (const f of childFolders) await DB.put('spotFolders', Object.assign({}, f, { parentFolderId: parentId }));
     const affected = (await Spots.all()).filter((s) => s.folderId === id);
-    for (const s of affected) await Spots.save({ id: s.id, folderId: null });
+    for (const s of affected) await Spots.save({ id: s.id, folderId: parentId });
     await DB.remove('spotFolders', id);
   },
 
@@ -52,18 +84,19 @@ const Spots = {
     try {
       const host = new URL(url).hostname.replace(/^www\./, '');
       if (host.includes('tiktok.com')) return 'tiktok';
+      if (host.includes('instagram.com')) return 'instagram';
       return 'link';
     } catch (e) {
       return 'link';
     }
   },
 
-  async createFromUrl(url) {
+  async createFromUrl(url, folderId) {
     const sourceType = Spots.detectSourceType(url);
-    return Spots.save({ sourceType, url, title: url });
+    return Spots.save({ sourceType, url, title: url, folderId: folderId || null });
   },
 
-  async createFromFile(file) {
+  async createFromFile(file, folderId) {
     const isVideo = file.type.startsWith('video/');
     let previewImage;
     if (isVideo) {
@@ -76,6 +109,7 @@ const Spots = {
       sourceType: isVideo ? 'video' : 'image',
       title: file.name.replace(/\.[a-z0-9]+$/i, ''),
       previewImage,
+      folderId: folderId || null,
     });
   },
 
@@ -213,8 +247,9 @@ const Spots = {
     const [trips, folders] = await Promise.all([Trips.all(), Spots.folders()]);
 
     function folderOptions(selectedId) {
+      const flat = Spots.flattenFolderTree(folders);
       return '<option value="">Kein Ordner</option>' +
-        folders.map((f) => '<option value="' + f.id + '"' + (f.id === selectedId ? ' selected' : '') + '>' + App.escapeHtml(f.name) + '</option>').join('') +
+        flat.map((n) => '<option value="' + n.folder.id + '"' + (n.folder.id === selectedId ? ' selected' : '') + '>' + '　'.repeat(n.depth) + App.escapeHtml(n.folder.name) + '</option>').join('') +
         '<option value="__new__">➕ Neuer Ordner…</option>';
     }
 
@@ -319,74 +354,116 @@ const Spots = {
     });
   },
 
-  openAddSheet(onChange) {
+  async openAddSheet(onChange, defaultFolderId) {
+    const folders = await Spots.folders();
+
+    function folderOptions(selectedId) {
+      const flat = Spots.flattenFolderTree(folders);
+      return '<option value="">Kein Ordner</option>' +
+        flat.map((n) => '<option value="' + n.folder.id + '"' + (n.folder.id === selectedId ? ' selected' : '') + '>' + '　'.repeat(n.depth) + App.escapeHtml(n.folder.name) + '</option>').join('') +
+        '<option value="__new__">➕ Neuer Ordner…</option>';
+    }
+
     App.openSheet('Reiseidee hinzufügen', (body) => {
       body.innerHTML =
         '<div class="tabline" id="sp-add-tabs"><button data-t="link" class="active">Link</button><button data-t="file">Bild/Video</button></div>' +
         '<div id="sp-add-link">' +
-        '<div class="field"><label>Link (z. B. TikTok)</label><input id="sp-add-url" type="url" placeholder="https://..."></div>' +
-        '<button class="btn primary" id="sp-add-url-save">Speichern</button>' +
+        '<div class="field"><label>Link (TikTok, Instagram, …)</label><input id="sp-add-url" type="url" placeholder="https://..."></div>' +
         '</div>' +
         '<div id="sp-add-file" hidden>' +
         '<div class="field"><input id="sp-add-file-input" type="file" accept="image/*,video/*"></div>' +
-        '<button class="btn primary" id="sp-add-file-save">Speichern</button>' +
-        '</div>';
+        '</div>' +
+        '<div class="field"><label>Ordner</label><select id="sp-add-folder">' + folderOptions(defaultFolderId || '') + '</select>' +
+        '<div id="sp-add-folder-new-row" style="display:none;margin-top:8px;gap:8px" class="field-row">' +
+        '<input id="sp-add-folder-new-name" type="text" placeholder="Name des Ordners" style="flex:1;min-height:var(--tap);padding:10px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg-elevated);color:var(--text)">' +
+        '<button class="btn small" id="sp-add-folder-new-save">Anlegen</button>' +
+        '</div></div>' +
+        '<button class="btn primary" id="sp-add-save" style="margin-top:4px">Speichern</button>';
 
+      let activeTab = 'link';
       App.qsa('#sp-add-tabs button', body).forEach((btn) => {
         btn.addEventListener('click', () => {
+          activeTab = btn.dataset.t;
           App.qsa('#sp-add-tabs button', body).forEach((b) => b.classList.toggle('active', b === btn));
-          App.qs('#sp-add-link', body).hidden = btn.dataset.t !== 'link';
-          App.qs('#sp-add-file', body).hidden = btn.dataset.t !== 'file';
+          App.qs('#sp-add-link', body).hidden = activeTab !== 'link';
+          App.qs('#sp-add-file', body).hidden = activeTab !== 'file';
         });
       });
 
-      App.qs('#sp-add-url-save', body).addEventListener('click', async () => {
-        const url = App.qs('#sp-add-url', body).value.trim();
-        if (!url) { App.toast('Bitte einen Link eingeben'); return; }
-        const spot = await Spots.createFromUrl(url);
-        App.closeSheet();
-        App.toast('Gespeichert – wird bei Internet automatisch angereichert');
-        if (onChange) onChange();
-        if (navigator.onLine) {
-          Spots.enrich(spot).then((updated) => Spots.openEditSheet(updated, { onChange, isNew: true })).catch(() => {});
-        }
+      const folderSelect = App.qs('#sp-add-folder', body);
+      const folderNewRow = App.qs('#sp-add-folder-new-row', body);
+      folderSelect.addEventListener('change', () => {
+        folderNewRow.style.display = folderSelect.value === '__new__' ? 'flex' : 'none';
+      });
+      App.qs('#sp-add-folder-new-save', body).addEventListener('click', async () => {
+        const name = App.qs('#sp-add-folder-new-name', body).value.trim();
+        if (!name) { App.toast('Bitte einen Namen eingeben'); return; }
+        const folder = await Spots.createFolder(name, defaultFolderId || null);
+        folders.push(folder);
+        folderSelect.innerHTML = folderOptions(folder.id);
+        folderNewRow.style.display = 'none';
       });
 
-      App.qs('#sp-add-file-save', body).addEventListener('click', async () => {
-        const input = App.qs('#sp-add-file-input', body);
-        const file = input.files[0];
-        if (!file) { App.toast('Bitte eine Datei auswählen'); return; }
-        const btn = App.qs('#sp-add-file-save', body);
-        btn.disabled = true; btn.textContent = 'Verarbeite…';
-        try {
-          const spot = await Spots.createFromFile(file);
+      App.qs('#sp-add-save', body).addEventListener('click', async () => {
+        const folderVal = App.qs('#sp-add-folder', body).value;
+        if (folderVal === '__new__') { App.toast('Bitte den neuen Ordner erst anlegen'); return; }
+        const folderId = folderVal || null;
+
+        if (activeTab === 'link') {
+          const url = App.qs('#sp-add-url', body).value.trim();
+          if (!url) { App.toast('Bitte einen Link eingeben'); return; }
+          const spot = await Spots.createFromUrl(url, folderId);
           App.closeSheet();
-          App.toast('Gespeichert');
+          App.toast('Gespeichert – wird bei Internet automatisch angereichert');
           if (onChange) onChange();
-          Spots.openEditSheet(spot, { onChange, isNew: true });
-        } catch (err) {
-          App.toast('Datei konnte nicht verarbeitet werden');
-          btn.disabled = false; btn.textContent = 'Speichern';
+          if (navigator.onLine) {
+            Spots.enrich(spot).then((updated) => Spots.openEditSheet(updated, { onChange, isNew: true })).catch(() => {});
+          }
+        } else {
+          const input = App.qs('#sp-add-file-input', body);
+          const file = input.files[0];
+          if (!file) { App.toast('Bitte eine Datei auswählen'); return; }
+          const btn = App.qs('#sp-add-save', body);
+          btn.disabled = true; btn.textContent = 'Verarbeite…';
+          try {
+            const spot = await Spots.createFromFile(file, folderId);
+            App.closeSheet();
+            App.toast('Gespeichert');
+            if (onChange) onChange();
+            Spots.openEditSheet(spot, { onChange, isNew: true });
+          } catch (err) {
+            App.toast('Datei konnte nicht verarbeitet werden');
+            btn.disabled = false; btn.textContent = 'Speichern';
+          }
         }
       });
     });
   },
 
   async render(container, state) {
-    state = state || { status: 'alle', country: 'alle', folder: 'alle' };
+    state = state || { status: 'alle', country: 'alle', folderId: null };
     const [spots, trips, folders] = await Promise.all([Spots.all(), Trips.all(), Spots.folders()]);
-    const countries = Array.from(new Set(spots.map((s) => s.country).filter(Boolean))).sort((a, b) => Countries.name(a).localeCompare(Countries.name(b), 'de'));
-    const hasUnfiled = spots.some((s) => !s.folderId);
 
-    let filtered = spots;
-    if (state.status !== 'alle') filtered = filtered.filter((s) => s.status === state.status);
-    if (state.country !== 'alle') filtered = filtered.filter((s) => s.country === state.country);
-    if (state.folder === 'none') filtered = filtered.filter((s) => !s.folderId);
-    else if (state.folder !== 'alle') filtered = filtered.filter((s) => s.folderId === state.folder);
+    const childFolders = Spots.subfolders(folders, state.folderId);
+    const breadcrumbPath = Spots.folderPath(folders, state.folderId);
+
+    let hereSpots = spots.filter((s) => (s.folderId || null) === (state.folderId || null));
+    if (state.status !== 'alle') hereSpots = hereSpots.filter((s) => s.status === state.status);
+    const countriesHere = Array.from(new Set(hereSpots.map((s) => s.country).filter(Boolean))).sort((a, b) => Countries.name(a).localeCompare(Countries.name(b), 'de'));
+    if (state.country !== 'alle') hereSpots = hereSpots.filter((s) => s.country === state.country);
 
     const pending = spots.filter((s) => !s.enrichAttempted);
     const bulkHtml = (pending.length > 0 && navigator.onLine)
       ? '<button class="btn" id="spots-bulk-enrich" style="margin-bottom:14px">' + pending.length + ' neue Idee' + (pending.length === 1 ? '' : 'n') + ' automatisch anreichern</button>'
+      : '';
+
+    const breadcrumbHtml = breadcrumbPath.length
+      ? '<div class="folder-breadcrumb">' +
+        '<span data-nav="">💡 Ideen</span>' +
+        breadcrumbPath.map((f, i) =>
+          '<span class="sep">›</span><span' + (i === breadcrumbPath.length - 1 ? ' class="current"' : ' data-nav="' + f.id + '"') + '>' + App.escapeHtml(f.name) + '</span>'
+        ).join('') +
+        '</div>'
       : '';
 
     const filterHtml =
@@ -394,31 +471,38 @@ const Spots = {
       ['alle', 'unbearbeitet', 'bestaetigt'].map((k) =>
         '<span class="chip' + (state.status === k ? ' selected' : '') + '" data-status="' + k + '">' + (k === 'alle' ? 'Alle' : SPOT_STATUS_LABELS[k]) + '</span>'
       ).join('') + '</div>' +
-      (countries.length > 0 ?
-        '<div class="chip-select" style="margin-bottom:10px">' +
-        '<span class="chip' + (state.country === 'alle' ? ' selected' : '') + '" data-country="alle">Alle Länder</span>' +
-        countries.map((c) => '<span class="chip' + (state.country === c ? ' selected' : '') + '" data-country="' + c + '">' + Countries.flagEmoji(c) + ' ' + App.escapeHtml(Countries.name(c)) + '</span>').join('') +
-        '</div>' : '') +
-      (folders.length > 0 ?
+      (countriesHere.length > 0 ?
         '<div class="chip-select" style="margin-bottom:14px">' +
-        '<span class="chip' + (state.folder === 'alle' ? ' selected' : '') + '" data-folder="alle">Alle Ordner</span>' +
-        folders.map((f) => '<span class="chip' + (state.folder === f.id ? ' selected' : '') + '" data-folder="' + f.id + '">📁 ' + App.escapeHtml(f.name) + '</span>').join('') +
-        (hasUnfiled ? '<span class="chip' + (state.folder === 'none' ? ' selected' : '') + '" data-folder="none">Ohne Ordner</span>' : '') +
+        '<span class="chip' + (state.country === 'alle' ? ' selected' : '') + '" data-country="alle">Alle Länder</span>' +
+        countriesHere.map((c) => '<span class="chip' + (state.country === c ? ' selected' : '') + '" data-country="' + c + '">' + Countries.flagEmoji(c) + ' ' + App.escapeHtml(Countries.name(c)) + '</span>').join('') +
         '</div>' : '');
 
-    let bodyHtml;
-    if (filtered.length === 0) {
-      bodyHtml = '<div class="empty-state"><div class="big">💡</div>Noch keine Reiseideen.<br>Tippe auf + oder teile einen Link aus TikTok.</div>';
-    } else if (state.folder !== 'alle') {
-      bodyHtml = filtered.map((s) => spotCard(s)).join('');
-    } else {
-      const groups = folders.map((f) => ({ key: f.id, label: '📁 ' + f.name, items: filtered.filter((s) => s.folderId === f.id) })).filter((g) => g.items.length);
-      const unfiled = filtered.filter((s) => !s.folderId);
-      if (unfiled.length) groups.push({ key: 'none', label: 'Ohne Ordner', items: unfiled });
-      bodyHtml = groups.map((g) => '<div class="section-title">' + App.escapeHtml(g.label) + '</div>' + g.items.map((s) => spotCard(s)).join('')).join('');
+    let bodyHtml = '';
+    if (childFolders.length) {
+      bodyHtml += '<div class="folder-grid">' + childFolders.map((f) => folderCard(f)).join('') + '</div>';
+    }
+    if (hereSpots.length) {
+      bodyHtml += hereSpots.map((s) => spotCard(s)).join('');
+    }
+    if (!childFolders.length && !hereSpots.length) {
+      bodyHtml = '<div class="empty-state"><div class="big">💡</div>' +
+        (state.folderId ? 'Dieser Ordner ist leer.' : 'Noch keine Reiseideen.<br>Tippe auf + oder teile einen Link aus TikTok/Instagram.') +
+        '</div>';
     }
 
-    container.innerHTML = bulkHtml + filterHtml + '<div id="spots-list">' + bodyHtml + '</div>';
+    container.innerHTML = breadcrumbHtml + bulkHtml + filterHtml +
+      '<div class="btn-row" style="margin-top:0;margin-bottom:14px"><button class="btn" id="spots-new-folder">📁 + Neuer Ordner</button></div>' +
+      '<div id="spots-list">' + bodyHtml + '</div>';
+
+    function folderCard(f) {
+      const directCount = spots.filter((s) => s.folderId === f.id).length;
+      const subCount = Spots.subfolders(folders, f.id).length;
+      return '<button class="folder-card" data-nav="' + f.id + '">' +
+        '<div class="folder-card-icon">📁</div>' +
+        '<div class="folder-card-name">' + App.escapeHtml(f.name) + '</div>' +
+        '<div class="folder-card-count">' + directCount + (subCount ? ' · ' + subCount + ' Ordner' : '') + '</div>' +
+        '</button>';
+    }
 
     function spotCard(s) {
       const trip = trips.find((t) => t.id === s.tripId);
@@ -440,19 +524,36 @@ const Spots = {
         '</div></button>';
     }
 
+    App.setFab(() => Spots.openAddSheet(() => Spots.render(container, state), state.folderId), 'Idee hinzufügen');
+
+    App.qsa('[data-nav]', container).forEach((el) => {
+      el.addEventListener('click', () => Spots.render(container, { status: state.status, country: 'alle', folderId: el.dataset.nav || null }));
+    });
     App.qsa('[data-status]', container).forEach((chip) => {
       chip.addEventListener('click', () => Spots.render(container, Object.assign({}, state, { status: chip.dataset.status })));
     });
     App.qsa('[data-country]', container).forEach((chip) => {
       chip.addEventListener('click', () => Spots.render(container, Object.assign({}, state, { country: chip.dataset.country })));
     });
-    App.qsa('[data-folder]', container).forEach((chip) => {
-      chip.addEventListener('click', () => Spots.render(container, Object.assign({}, state, { folder: chip.dataset.folder })));
-    });
     App.qsa('#spots-list [data-id]', container).forEach((btn) => {
       btn.addEventListener('click', () => {
-        const spot = filtered.find((s) => s.id === btn.dataset.id);
+        const spot = hereSpots.find((s) => s.id === btn.dataset.id);
         Spots.openEditSheet(spot, { onChange: () => Spots.render(container, state) });
+      });
+    });
+
+    App.qs('#spots-new-folder', container).addEventListener('click', () => {
+      App.openSheet('Neuer Ordner', (sheetBody) => {
+        sheetBody.innerHTML = '<div class="field"><label>Name</label><input id="nf-name" type="text" placeholder="z. B. Afrika"></div>' +
+          '<div class="btn-row"><button class="btn ghost" id="nf-cancel">Abbrechen</button><button class="btn primary" id="nf-save">Anlegen</button></div>';
+        App.qs('#nf-cancel', sheetBody).addEventListener('click', () => App.closeSheet());
+        App.qs('#nf-save', sheetBody).addEventListener('click', async () => {
+          const name = App.qs('#nf-name', sheetBody).value.trim();
+          if (!name) { App.toast('Bitte einen Namen eingeben'); return; }
+          await Spots.createFolder(name, state.folderId);
+          App.closeSheet();
+          Spots.render(container, state);
+        });
       });
     });
 
@@ -475,6 +576,6 @@ Views.spots = async function (container) {
   App.setTitle('Ideen');
   App.setBack(null);
   App.setTripTabs(null);
-  App.setFab(() => Spots.openAddSheet(() => Views.spots(container)), 'Idee hinzufügen');
-  await Spots.render(container);
+  const state = { status: 'alle', country: 'alle', folderId: null };
+  await Spots.render(container, state);
 };

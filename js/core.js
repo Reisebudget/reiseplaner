@@ -19,7 +19,7 @@ const BOOKING_STATUS_BADGE = { bezahlt: 'paid', vor_ort: 'local', offen: 'open' 
 
 const SPOT_STATUS_LABELS = { unbearbeitet: 'Unbearbeitet', bestaetigt: 'Bestätigt' };
 const SPOT_STATUS_BADGE = { unbearbeitet: 'local', bestaetigt: 'paid' };
-const SPOT_SOURCE_LABELS = { tiktok: 'TikTok', link: 'Link', image: 'Bild', video: 'Video', manual: 'Manuell' };
+const SPOT_SOURCE_LABELS = { tiktok: 'TikTok', instagram: 'Instagram', link: 'Link', image: 'Bild', video: 'Video', manual: 'Manuell' };
 const SPOT_CONFIDENCE_LABELS = { hoch: 'Hoch', mittel: 'Mittel', niedrig: 'Niedrig' };
 
 const App = {
