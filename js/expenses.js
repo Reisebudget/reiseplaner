@@ -34,7 +34,7 @@ const Expenses = {
       '<div class="card" id="e-form">' +
       '<div class="field-row">' +
       '<div class="field"><label>Betrag</label><input id="e-amount" type="text" inputmode="decimal" placeholder="0,00"></div>' +
-      '<div class="field"><label>Währung</label><select id="e-currency">' + Object.keys(DEFAULT_RATES).sort().map((c) => '<option value="' + c + '">' + c + '</option>').join('') + '</select></div>' +
+      '<div class="field"><label>Währung</label><select id="e-currency">' + App.currencyCodesSorted().map((c) => '<option value="' + c + '">' + c + '</option>').join('') + '</select></div>' +
       '</div>' +
       '<div class="field-row">' +
       '<div class="field"><label>Kategorie</label><select id="e-category">' + CATEGORY_KEYS.map((k) => '<option value="' + k + '">' + CATEGORY_LABELS[k] + '</option>').join('') + '</select></div>' +
@@ -88,7 +88,7 @@ const Expenses = {
       body.innerHTML =
         '<div class="field-row">' +
         '<div class="field"><label>Betrag</label><input id="x-amount" type="text" inputmode="decimal" value="' + expense.amount.toString().replace('.', ',') + '"></div>' +
-        '<div class="field"><label>Währung</label><select id="x-currency">' + Object.keys(DEFAULT_RATES).sort().map((c) => '<option value="' + c + '"' + (c === expense.currency ? ' selected' : '') + '>' + c + '</option>').join('') + '</select></div>' +
+        '<div class="field"><label>Währung</label><select id="x-currency">' + App.currencyCodesSorted().map((c) => '<option value="' + c + '"' + (c === expense.currency ? ' selected' : '') + '>' + c + '</option>').join('') + '</select></div>' +
         '</div>' +
         '<div class="field-row">' +
         '<div class="field"><label>Kategorie</label><select id="x-category">' + CATEGORY_KEYS.map((k) => '<option value="' + k + '"' + (k === expense.category ? ' selected' : '') + '>' + CATEGORY_LABELS[k] + '</option>').join('') + '</select></div>' +

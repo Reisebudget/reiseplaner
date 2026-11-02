@@ -52,7 +52,7 @@ const Bookings = {
       dateStart: App.today(), timeStart: '', dateEnd: '', timeEnd: '',
       price: 0, currency: Countries.currency(trip.countries[0] || 'EUR'), status: 'offen', refNumber: '', note: '',
     };
-    const currencyOptions = Object.keys(DEFAULT_RATES).sort();
+    const currencyOptions = App.currencyCodesSorted();
 
     App.openSheet(isNew ? 'Neue Buchung' : 'Buchung bearbeiten', (body) => {
       body.innerHTML =

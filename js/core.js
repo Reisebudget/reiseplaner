@@ -168,6 +168,11 @@ const App = {
     return map;
   },
 
+  currencyCodesSorted() {
+    const rest = Object.keys(DEFAULT_RATES).filter((c) => c !== 'EUR').sort();
+    return ['EUR', ...rest];
+  },
+
   toEUR(amount, currency, ratesMap) {
     const n = Number(amount) || 0;
     if (!currency || currency === 'EUR') return n;

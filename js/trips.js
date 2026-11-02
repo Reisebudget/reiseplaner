@@ -159,6 +159,7 @@ const Trips = {
       '<div class="card-row"><span class="label">Summe gebucht</span><span class="value">' + App.formatMoney(o.summeGebucht, 'EUR') + '</span></div>' +
       '<div class="card-row"><span class="label">Unterwegs ausgegeben</span><span class="value">' + App.formatMoney(o.summeAusgegeben, 'EUR') + '</span></div>' +
       '<div class="card-row"><span class="label">Bar vor Ort fällig</span><span class="value">' + App.formatMoney(o.barVorOrtFaellig, 'EUR') + '</span></div>' +
+      '<p class="field-hint" style="padding:0 2px">Summe aller Buchungen mit Status „Vor Ort zahlen" (nicht aus Ausgaben) – wird unter „Buchungen" beim Anlegen/Bearbeiten gesetzt.</p>' +
       '</div>';
 
     html += '<div class="section-title">Flüge &amp; Anreise</div><div class="card">';
@@ -272,7 +273,7 @@ const Trips = {
   },
 };
 
-Views.trips = async function (container) {
+Views.trips = async function (container, mode) {
   App.setTitle('Trips');
   App.setBack(null);
   App.setTripTabs(null);
@@ -283,7 +284,55 @@ Views.trips = async function (container) {
     container.innerHTML = '<div class="empty-state"><div class="big">🧳</div>Noch keine Trips.<br>Tippe auf + für deinen ersten Trip.</div>';
     return;
   }
-  container.innerHTML = Trips.renderList(trips);
+
+  mode = mode || 'list';
+  const toggleHtml = '<div class="tabline" id="trips-mode"><button data-m="list"' + (mode === 'list' ? ' class="active"' : '') + '>Liste</button>' +
+    '<button data-m="year"' + (mode === 'year' ? ' class="active"' : '') + '>Nach Jahr</button></div>';
+
+  if (mode === 'year') {
+    container.innerHTML = toggleHtml + '<div id="trips-body">Lädt…</div>';
+    await Trips.renderYearOverview(trips, App.qs('#trips-body', container));
+  } else {
+    container.innerHTML = toggleHtml + '<div id="trips-body">' + Trips.renderList(trips) + '</div>';
+    Trips.wireList(App.qs('#trips-body', container));
+  }
+
+  App.qsa('#trips-mode button', container).forEach((btn) => {
+    btn.addEventListener('click', () => Views.trips(container, btn.dataset.m));
+  });
+};
+
+Trips.renderYearOverview = async function (trips, container) {
+  const groups = {};
+  trips.forEach((t) => {
+    const year = (t.startDate || '').slice(0, 4) || 'Unbekannt';
+    (groups[year] = groups[year] || []).push(t);
+  });
+  const years = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+
+  const cards = await Promise.all(years.map(async (year) => {
+    const overviews = await Promise.all(groups[year].map((t) => Trips.computeOverview(t.id)));
+    const budget = overviews.reduce((s, o) => s + (o.trip.budget || 0), 0);
+    const gebucht = overviews.reduce((s, o) => s + o.summeGebucht, 0);
+    const ausgegeben = overviews.reduce((s, o) => s + o.summeAusgegeben, 0);
+    const restbudget = budget - gebucht - ausgegeben;
+    const tripRows = groups[year].map((t) =>
+      '<button class="list-item" data-id="' + t.id + '" style="margin-top:8px">' +
+      '<div class="main"><div class="title">' + App.escapeHtml(t.name) + '</div>' +
+      '<div class="sub">' + App.formatDateRange(t.startDate, t.endDate) + '</div></div>' +
+      '<span class="chev">›</span></button>'
+    ).join('');
+    return '<div class="section-title">' + App.escapeHtml(year) + ' · ' + groups[year].length + ' Trip' + (groups[year].length === 1 ? '' : 's') + '</div>' +
+      '<div class="card">' +
+      '<div class="card-row"><span class="label">Budget gesamt</span><span class="value">' + App.formatMoney(budget, 'EUR') + '</span></div>' +
+      '<div class="card-row"><span class="label">Restbudget</span><span class="value">' + App.formatMoney(restbudget, 'EUR') + '</span></div>' +
+      '<div class="card-row"><span class="label">Summe gebucht</span><span class="value">' + App.formatMoney(gebucht, 'EUR') + '</span></div>' +
+      '<div class="card-row"><span class="label">Unterwegs ausgegeben</span><span class="value">' + App.formatMoney(ausgegeben, 'EUR') + '</span></div>' +
+      tripRows +
+      '</div>';
+  }));
+
+  container.innerHTML = cards.join('');
   Trips.wireList(container);
 };
 
