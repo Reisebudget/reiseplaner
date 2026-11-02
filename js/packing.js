@@ -310,7 +310,7 @@ const Packing = {
       '<button class="btn" id="p-file-import">Aus Datei importieren</button>' +
       '<button class="btn" id="p-export">Als Datei exportieren</button>' +
       '</div>' +
-      '<input id="p-file-input" type="file" accept=".txt,.md,text/plain,text/markdown" hidden>' +
+      '<input id="p-file-input" type="file" accept=".txt,.md,.markdown,text/plain,text/markdown,text/*" hidden>' +
       '<p class="muted" style="margin-top:-6px">' + checkedCount + ' von ' + items.length + ' gepackt</p>' +
       '<div class="progress-bar" style="margin-bottom:14px"><span style="width:' + pct + '%"></span></div>' +
       tagFilterHtml +
