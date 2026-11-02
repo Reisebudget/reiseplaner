@@ -5,10 +5,13 @@ const Expenses = {
     return rows.sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || '').localeCompare(a.createdAt || ''));
   },
 
+  // amountEUR ist der eigene Anteil in Euro (für Budget/Gesamt-Tracking) -
+  // bei geteilten Ausgaben also amount / (Anzahl Mitreisende + man selbst).
   async save(data) {
     const ratesMap = await App.ratesMap();
     const rate = data.currency === 'EUR' ? 1 : (ratesMap[data.currency] || 1);
-    const amountEUR = App.toEUR(data.amount, data.currency, ratesMap);
+    const shareCount = (data.splitWith && data.splitWith.length) ? data.splitWith.length + 1 : 1;
+    const amountEUR = App.toEUR(data.amount / shareCount, data.currency, ratesMap);
     const now = new Date().toISOString();
     if (data.id) {
       const existing = await DB.get('expenses', data.id);
@@ -42,19 +45,21 @@ const Expenses = {
       '</div>' +
       '<div class="field"><label>Datum</label><input id="e-date" type="date" value="' + App.today() + '"></div>' +
       '<div class="field"><label>Notiz</label><input id="e-note" type="text" placeholder="optional"></div>' +
-      (trip.people && trip.people.length ? '<div class="field"><label>Mit wem noch teilen? (du bist automatisch dabei)</label><div id="e-people-chips" class="chip-select" style="margin-bottom:0"></div></div>' : '') +
+      (trip.people && trip.people.length ? '<div class="field"><label>Mit wem noch teilen? (du bist automatisch dabei)</label><div id="e-people-chips" class="chip-select" style="margin-bottom:4px"></div><p id="e-split-preview" class="field-hint mt-0"></p></div>' : '') +
       '<button class="btn primary" id="e-save">Ausgabe speichern</button>' +
       '</div>' +
-      '<div class="card-row" style="margin-bottom:10px"><span class="label">Gesamt ausgegeben</span><span class="value">' + App.formatMoney(total, 'EUR') + '</span></div>' +
+      '<div class="card-row" style="margin-bottom:10px"><span class="label">Gesamt ausgegeben (dein Anteil)</span><span class="value">' + App.formatMoney(total, 'EUR') + '</span></div>' +
       '<div id="e-list">' + (rows.length === 0 ? '<div class="empty-state"><div class="big">💳</div>Noch keine Ausgaben erfasst.</div>' : rows.map(row).join('')) + '</div>';
 
     function row(r) {
-      const split = r.splitWith && r.splitWith.length >= 1
-        ? '<br><span class="muted">Aufgeteilt auf ' + (r.splitWith.length + 1) + ' Personen (inkl. dir) · ' + App.formatMoney(r.amount / (r.splitWith.length + 1), r.currency) + ' pro Person</span>' : '';
+      const shareCount = r.splitWith && r.splitWith.length ? r.splitWith.length + 1 : 1;
+      const shareAmount = r.amount / shareCount;
+      const split = shareCount > 1
+        ? '<br><span class="muted">Gesamt ' + App.formatMoney(r.amount, r.currency) + ' · geteilt durch ' + shareCount + ' (inkl. dir)</span>' : '';
       return '<button class="list-item" data-id="' + r.id + '" style="align-items:flex-start">' +
         '<div class="main"><div class="title">' + CATEGORY_LABELS[r.category] + ' · ' + App.escapeHtml(Countries.name(r.country)) + '</div>' +
         '<div class="sub">' + App.formatDate(r.date) + (r.note ? ' · ' + App.escapeHtml(r.note) : '') + split + '</div></div>' +
-        '<div class="trailing">' + App.formatMoney(r.amount, r.currency) +
+        '<div class="trailing">' + App.formatMoney(shareAmount, r.currency) +
         (r.currency !== 'EUR' ? '<br><span class="muted">' + App.formatMoney(r.amountEUR, 'EUR') + '</span>' : '') + '</div></button>';
     }
 
@@ -87,6 +92,14 @@ const Expenses = {
 
     let selectedPeople = [];
     const peopleChipsBox = App.qs('#e-people-chips', container);
+    const splitPreview = App.qs('#e-split-preview', container);
+    function updateSplitPreview() {
+      if (!splitPreview) return;
+      const amount = App.parseDecimal(App.qs('#e-amount', container).value);
+      if (selectedPeople.length === 0 || !amount) { splitPreview.textContent = ''; return; }
+      const shareCount = selectedPeople.length + 1;
+      splitPreview.textContent = 'Dein Anteil: ' + App.formatMoney(amount / shareCount, selectedCurrency);
+    }
     function renderPeopleChips() {
       if (!peopleChipsBox) return;
       peopleChipsBox.innerHTML = trip.people.map((p) =>
@@ -98,10 +111,12 @@ const Expenses = {
           const idx = selectedPeople.indexOf(name);
           if (idx === -1) selectedPeople.push(name); else selectedPeople.splice(idx, 1);
           renderPeopleChips();
+          updateSplitPreview();
         });
       });
     }
     renderPeopleChips();
+    if (splitPreview) App.qs('#e-amount', container).addEventListener('input', updateSplitPreview);
 
     App.qs('#e-save', container).addEventListener('click', async () => {
       const amount = App.parseDecimal(App.qs('#e-amount', container).value);
@@ -138,7 +153,7 @@ const Expenses = {
         '</div>' +
         '<div class="field"><label>Datum</label><input id="x-date" type="date" value="' + expense.date + '"></div>' +
         '<div class="field"><label>Notiz</label><input id="x-note" type="text" value="' + App.escapeHtml(expense.note || '') + '"></div>' +
-        (trip.people && trip.people.length ? '<div class="field"><label>Mit wem noch teilen? (du bist automatisch dabei)</label><div id="x-people-chips" class="chip-select" style="margin-bottom:8px"></div></div>' : '') +
+        (trip.people && trip.people.length ? '<div class="field"><label>Mit wem noch teilen? (du bist automatisch dabei)</label><div id="x-people-chips" class="chip-select" style="margin-bottom:4px"></div><p id="x-split-preview" class="field-hint mt-0"></p></div>' : '') +
         '<button class="btn danger" id="x-delete" style="margin-bottom:10px">Ausgabe löschen</button>' +
         '<div class="btn-row"><button class="btn ghost" id="x-cancel">Abbrechen</button><button class="btn primary" id="x-save">Speichern</button></div>';
 
@@ -169,6 +184,14 @@ const Expenses = {
 
       let selectedPeople = (expense.splitWith || []).slice();
       const peopleChipsBox = App.qs('#x-people-chips', body);
+      const splitPreview = App.qs('#x-split-preview', body);
+      function updateSplitPreview() {
+        if (!splitPreview) return;
+        const amount = App.parseDecimal(App.qs('#x-amount', body).value);
+        if (selectedPeople.length === 0 || !amount) { splitPreview.textContent = ''; return; }
+        const shareCount = selectedPeople.length + 1;
+        splitPreview.textContent = 'Dein Anteil: ' + App.formatMoney(amount / shareCount, selectedCurrency);
+      }
       function renderPeopleChips() {
         if (!peopleChipsBox) return;
         peopleChipsBox.innerHTML = trip.people.map((p) =>
@@ -180,10 +203,13 @@ const Expenses = {
             const idx = selectedPeople.indexOf(name);
             if (idx === -1) selectedPeople.push(name); else selectedPeople.splice(idx, 1);
             renderPeopleChips();
+            updateSplitPreview();
           });
         });
       }
       renderPeopleChips();
+      updateSplitPreview();
+      if (splitPreview) App.qs('#x-amount', body).addEventListener('input', updateSplitPreview);
 
       App.qs('#x-cancel', body).addEventListener('click', () => App.closeSheet());
       App.qs('#x-delete', body).addEventListener('click', async () => {
