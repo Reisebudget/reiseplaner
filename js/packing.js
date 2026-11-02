@@ -67,6 +67,34 @@ const Packing = {
 
   // --- Textformat: # Titel / ## Abschnitt / > Hinweis / Gegenstand | Notiz #tag ---
 
+  // Liest eine Datei robust als Text, erkennt UTF-16-BOMs (sonst produziert
+  // file.text() bei solchen Dateien nur wirre Zeichen) und entfernt eine
+  // eventuelle UTF-8-BOM.
+  async readFileAsText(file) {
+    const buffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) {
+      return new TextDecoder('utf-16le').decode(buffer);
+    }
+    if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) {
+      return new TextDecoder('utf-16be').decode(buffer);
+    }
+    let text = new TextDecoder('utf-8').decode(buffer);
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+    return text;
+  },
+
+  // Grobe Erkennung, ob eine Datei kein brauchbarer Text ist (z. B. aus
+  // Versehen ein Bild/PDF gewählt) - dann lieber einen klaren Hinweis zeigen
+  // statt eine Vorschau voller wirrer Zeichen.
+  looksLikeGarbage(text) {
+    if (!text) return false;
+    const sample = text.slice(0, 3000);
+    if (!sample.trim()) return false;
+    const bad = (sample.match(/[�\x00-\x08\x0B\x0C\x0E-\x1F]/g) || []).length;
+    return bad / sample.length > 0.03;
+  },
+
   parseItemLine(rawLine) {
     let line = rawLine.trim().replace(/^(?:[-*•●○]|\[\s?[xX]?\s?\]|☐|☑|\d+[.)])\s*/, '');
     const tags = [];
@@ -461,7 +489,7 @@ const Packing = {
     App.qs('#p-file-input', container).addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      const text = await file.text();
+      const text = await Packing.readFileAsText(file);
       e.target.value = '';
       Packing.openImportPreview(trip, container, text, { title: 'Datei-Import-Vorschau', state });
     });
@@ -544,11 +572,18 @@ const Packing = {
   // Gemeinsame Vorschau für Datei-Import und "Liste einfügen".
   openImportPreview(trip, container, text, opts) {
     opts = opts || {};
-    const parsed = Packing.parseImportText(text);
+    const isGarbage = Packing.looksLikeGarbage(text);
+    const parsed = isGarbage ? { title: null, sections: [] } : Packing.parseImportText(text);
     const totalItems = parsed.sections.reduce((s, sec) => s + sec.items.length, 0);
     const namedSections = parsed.sections.filter((s) => s.name).length;
 
     App.openSheet(opts.title || 'Import-Vorschau', (body) => {
+      if (isGarbage) {
+        body.innerHTML = '<p class="muted">Diese Datei sieht nicht nach lesbarem Text aus (z. B. ein Bild, PDF oder Word-Dokument statt .txt/.md). Bitte eine reine Textdatei wählen.</p>' +
+          '<div class="btn-row"><button class="btn ghost" id="pi-close">Schließen</button></div>';
+        App.qs('#pi-close', body).addEventListener('click', () => App.closeSheet());
+        return;
+      }
       if (totalItems === 0) {
         body.innerHTML = '<p class="muted">Keine Gegenstände erkannt.</p><div class="btn-row"><button class="btn ghost" id="pi-close">Schließen</button></div>';
         App.qs('#pi-close', body).addEventListener('click', () => App.closeSheet());
