@@ -333,11 +333,12 @@ const Packing = {
       '<button class="btn" id="p-template-apply">Vorlage anwenden</button>' +
       '<button class="btn" id="p-template-save">Als Vorlage speichern</button>' +
       '</div>' +
-      '<div class="btn-row" style="margin-top:0;margin-bottom:14px">' +
+      '<div class="btn-row" style="margin-top:0">' +
       '<button class="btn" id="p-bulk-add">Liste einfügen</button>' +
       '<button class="btn" id="p-file-import">Aus Datei importieren</button>' +
       '<button class="btn" id="p-export">Als Datei exportieren</button>' +
       '</div>' +
+      (items.length ? '<div class="btn-row" style="margin-top:0;margin-bottom:14px"><button class="btn danger" id="p-clear-all">Packliste leeren</button></div>' : '<div style="margin-bottom:14px"></div>') +
       '<input id="p-file-input" type="file" hidden>' +
       '<p class="muted" style="margin-top:-6px">' + checkedCount + ' von ' + items.length + ' gepackt</p>' +
       '<div class="progress-bar" style="margin-bottom:14px"><span style="width:' + pct + '%"></span></div>' +
@@ -509,6 +510,16 @@ const Packing = {
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 2000);
     });
+
+    const clearBtn = App.qs('#p-clear-all', container);
+    if (clearBtn) {
+      clearBtn.addEventListener('click', async () => {
+        if (!confirm('Die komplette Packliste (alle Gegenstände und Abschnitte) wirklich löschen? Das kann nicht rückgängig gemacht werden.')) return;
+        await Packing.applyParsedSections(trip.id, [], 'replace');
+        App.toast('Packliste geleert');
+        Packing.render(trip, container, { tagFilter: [] });
+      });
+    }
   },
 
   openItemEditSheet(trip, item, sections, container, state) {
