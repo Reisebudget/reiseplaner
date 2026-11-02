@@ -175,11 +175,21 @@ Views.map = async function (container) {
     const related = Trips.tripsForCountry(trips, code);
     const isManual = manualVisited.includes(code);
     const facts = Countries.facts(code);
+    const emergency = Countries.emergency(code);
+    const embassy = Countries.embassyDe(code);
     let html = '<div class="card"><h3>' + Countries.flagEmoji(code) + ' ' + App.escapeHtml(name) + '</h3>';
     if (facts) {
       html += '<div class="card-row"><span class="label">Hauptstadt</span><span class="value">' + App.escapeHtml(facts.capital) + '</span></div>' +
         '<div class="card-row"><span class="label">Einwohner</span><span class="value">' + Countries.formatPopulation(facts.population) + '</span></div>' +
         '<div class="card-row"><span class="label">Sprache</span><span class="value">' + App.escapeHtml(facts.language) + '</span></div>';
+    }
+    html += '<div class="card-row"><span class="label">Notruf</span><span class="value">' + (emergency ? App.escapeHtml(emergency) : 'Noch nicht hinterlegt') + '</span></div>';
+    html += '<div class="section-title" style="margin:14px 0 6px">Deutsche Botschaft/Konsulat</div>';
+    if (embassy) {
+      html += '<p class="muted mt-0">' + App.escapeHtml(embassy.name) + '<br>' + App.escapeHtml(embassy.address) +
+        (embassy.phone ? '<br>Tel. ' + App.escapeHtml(embassy.phone) : '') + (embassy.note ? '<br>' + App.escapeHtml(embassy.note) : '') + '</p>';
+    } else {
+      html += '<p class="muted mt-0">Noch nicht hinterlegt. Aktuelle Adresse/Nummer auf der Seite des <a href="https://www.auswaertiges-amt.de/de/aussenpolitik/laender" target="_blank" rel="noopener">Auswärtigen Amts</a> nachsehen.</p>';
     }
     if (related.length === 0) {
       html += '<p class="muted mt-0">Noch kein Trip für dieses Land angelegt.</p>' +
