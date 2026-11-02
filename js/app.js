@@ -336,7 +336,32 @@ async function renderBackupSettings(container) {
     '</div>' +
     '<input id="s-import-file" type="file" accept="application/json" hidden>' +
     '</div>' +
+    '<div class="section-title">App-Version</div>' +
+    '<div class="card">' +
+    '<p class="muted mt-0">Die App aktualisiert sich normalerweise von selbst. Falls du eine neue Funktion erwartest, die noch fehlt, hier manuell prüfen.</p>' +
+    '<button class="btn" id="s-check-update">Nach Updates suchen</button>' +
+    '</div>' +
     '<p class="muted center" style="margin-top:24px">Alle Daten bleiben ausschließlich auf diesem Gerät (zusätzlich in deinem Konto, falls angemeldet).</p>';
+
+  App.qs('#s-check-update', container).addEventListener('click', async () => {
+    const btn = App.qs('#s-check-update', container);
+    if (!('serviceWorker' in navigator)) { App.toast('Nicht unterstützt'); return; }
+    btn.disabled = true; btn.textContent = 'Prüfe…';
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (!reg) { App.toast('Keine neue Version gefunden'); btn.disabled = false; btn.textContent = 'Nach Updates suchen'; return; }
+      await reg.update();
+      if (reg.waiting || reg.installing) {
+        App.toast('Update gefunden – wird geladen…');
+      } else {
+        App.toast('Du hast bereits die neueste Version');
+        btn.disabled = false; btn.textContent = 'Nach Updates suchen';
+      }
+    } catch (e) {
+      App.toast('Prüfung fehlgeschlagen – offline?');
+      btn.disabled = false; btn.textContent = 'Nach Updates suchen';
+    }
+  });
 
   App.qs('#s-export', container).addEventListener('click', async () => {
     await Backup.downloadExport();
@@ -482,6 +507,13 @@ App.refresh = route;
     });
     navigator.serviceWorker.register('sw.js').then((reg) => {
       reg.update().catch(() => {});
+      // iOS holt die App beim erneuten Öffnen oft nur aus dem Speicher zurück,
+      // ohne neu zu laden - dann läuft obiger Check nie. Deshalb hier nochmal
+      // aktiv nach einem Update fragen, sobald die Seite wieder sichtbar wird.
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') reg.update().catch(() => {});
+      });
+      window.addEventListener('pageshow', () => reg.update().catch(() => {}));
     }).catch(() => {});
   }
 })();
