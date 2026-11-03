@@ -1,5 +1,5 @@
 // Service Worker: Precaching für vollständige Offline-Nutzung.
-const CACHE_NAME = 'reiseplaner-v24';
+const CACHE_NAME = 'reiseplaner-v25';
 const PRECACHE_URLS = [
   './',
   './index.html',
@@ -30,9 +30,15 @@ const PRECACHE_URLS = [
 ];
 
 self.addEventListener('install', (event) => {
+  // cache.addAll() würde teils den normalen HTTP-Cache des Browsers nutzen
+  // (GitHub Pages cacht Dateien 10 Minuten) und so versehentlich veraltete
+  // Dateien übernehmen. Deshalb jede Datei einzeln mit cache:'reload' holen,
+  // das erzwingt eine wirklich frische Netzwerk-Anfrage.
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(PRECACHE_URLS))
+      .then((cache) => Promise.all(
+        PRECACHE_URLS.map((url) => fetch(url, { cache: 'reload' }).then((res) => cache.put(url, res)))
+      ))
       .then(() => self.skipWaiting())
   );
 });
