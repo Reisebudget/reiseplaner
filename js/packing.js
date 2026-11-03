@@ -91,8 +91,9 @@ const Packing = {
     if (!text) return false;
     const sample = text.slice(0, 3000);
     if (!sample.trim()) return false;
-    const bad = (sample.match(/[�\x00-\x08\x0B\x0C\x0E-\x1F]/g) || []).length;
-    return bad / sample.length > 0.03;
+    const replacementChar = String.fromCharCode(0xFFFD);
+    const bad = (sample.match(new RegExp('[' + replacementChar + '\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F]', 'g')) || []).length;
+    return bad > 10 && bad / sample.length > 0.2;
   },
 
   parseItemLine(rawLine) {
